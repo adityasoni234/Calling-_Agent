@@ -1,0 +1,139 @@
+"""Builds the system prompt from an agent's configuration.
+
+Two rules shape this file:
+
+1. The persona block is byte-stable for a given agent, so it can be sent as a
+   cached prefix. Anything that changes per turn (state, retrieved context) is
+   appended after it or passed as a user message.
+2. Nothing here invents facts. If the knowledge base has no answer, the prompt
+   tells the model to say so.
+"""
+
+from __future__ import annotations
+
+from app.agents.state import STATE_GUIDANCE, ConversationState
+from app.models.agent import Agent, AgentLanguage
+
+LANGUAGE_RULES = {
+    AgentLanguage.ENGLISH: "Speak English only. Keep it simple and clear.",
+    AgentLanguage.HINDI: "Hindi mein baat karein, Roman script mein likhein (Devanagari nahi).",
+    AgentLanguage.HINGLISH: (
+        "Speak natural Hinglish - Hindi grammar with common English words mixed in, "
+        "written in Roman script, the way people actually speak on the phone in India."
+    ),
+    AgentLanguage.AUTO: (
+        "Mirror the customer's language exactly. If they speak Hindi, reply in Hindi "
+        "(Roman script). If they mix Hindi and English, mix the same way. If they speak "
+        "English, reply in English. Switch the moment they switch."
+    ),
+}
+
+BASE_RULES = [
+    "You are on a live phone call. Everything you write is spoken aloud by a "
+    "text-to-speech engine, so write plain speech: no markdown, no bullet points, "
+    "no emoji, no stage directions.",
+    "Keep every reply under 40 words. Ask exactly one question at a time, then stop "
+    "and let the customer answer.",
+    "Never invent facts about pricing, features, availability, or timelines. If you "
+    "do not know, say you will have someone confirm and move on.",
+    "If the customer interrupts you, stop and address what they just said.",
+    "Do not repeat yourself. Do not re-introduce yourself mid-call.",
+    "Numbers, dates and prices should be written as words the way they are spoken.",
+    "When the call is finished, end your final line with the marker [END_CALL].",
+]
+
+
+def _bullets(items: list[str]) -> str:
+    return "\n".join(f"- {item}" for item in items if str(item).strip())
+
+
+def build_system_prompt(agent: Agent) -> str:
+    """The stable, cacheable half of the prompt. Identical on every turn."""
+    parts: list[str] = [
+        f"You are {agent.name}, a {agent.role_title} at {agent.company_name or 'the company'}.",
+        f"Personality: {agent.personality}" if agent.personality else "",
+        "",
+        "## Objective",
+        agent.primary_objective
+        or "Have a helpful conversation and understand what the customer needs.",
+    ]
+
+    if agent.secondary_objectives:
+        parts += ["", "Secondary objectives:", _bullets(list(agent.secondary_objectives))]
+
+    parts += [
+        "",
+        "## Language",
+        LANGUAGE_RULES.get(agent.language, LANGUAGE_RULES[AgentLanguage.AUTO]),
+    ]
+    parts += ["", "## How to talk", _bullets(BASE_RULES)]
+
+    if agent.forbidden_rules:
+        parts += [
+            "",
+            "## Never do this",
+            _bullets(list(agent.forbidden_rules)),
+        ]
+
+    if agent.qualification_questions:
+        parts += [
+            "",
+            "## Qualification questions",
+            "Work these in naturally over the call, one at a time - never as a list:",
+            _bullets(list(agent.qualification_questions)),
+        ]
+
+    if agent.objection_handling:
+        lines = [
+            f'If they say "{item.get("objection", "")}": {item.get("response", "")}'
+            for item in agent.objection_handling
+            if item.get("objection")
+        ]
+        parts += ["", "## Handling objections", _bullets(lines)]
+
+    if agent.ending_rules:
+        parts += ["", "## When to end the call", _bullets(list(agent.ending_rules))]
+
+    transfer = agent.transfer_rules or {}
+    if transfer.get("enabled"):
+        conditions = transfer.get("conditions") or ["the customer explicitly asks for a human"]
+        parts += [
+            "",
+            "## Transfer to a human",
+            "Write the marker [TRANSFER] on its own at the end of your reply when:",
+            _bullets(list(conditions)),
+        ]
+
+    if agent.system_instructions:
+        parts += ["", "## Additional instructions", agent.system_instructions]
+
+    return "\n".join(part for part in parts if part != "").strip()
+
+
+def build_turn_context(
+    state: ConversationState,
+    *,
+    retrieved: list[str] | None = None,
+    digest: str | None = None,
+) -> str:
+    """The volatile half: appended per turn, never part of the cached prefix."""
+    blocks = [f"[Current stage: {state.value}] {STATE_GUIDANCE[state]}"]
+
+    if digest:
+        blocks.append(f"[Earlier in this call] {digest}")
+
+    if retrieved:
+        joined = "\n\n".join(retrieved)
+        blocks.append(
+            "[Company knowledge - use only these facts, and if they do not answer the "
+            f"question say you will confirm and follow up]\n{joined}"
+        )
+    return "\n\n".join(blocks)
+
+
+def build_greeting(agent: Agent, lead_name: str | None = None) -> str:
+    if agent.greeting:
+        return agent.greeting.replace("{name}", lead_name or "").replace("  ", " ").strip()
+    who = f" {lead_name}" if lead_name else ""
+    company = agent.company_name or "our team"
+    return f"Hello{who}, this is {agent.name} from {company}. How are you today?"

@@ -59,6 +59,29 @@ services:
       redis:
         condition: service_healthy
 
+  worker:
+    container_name: calling-agent-worker
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-calling_agent}
+      REDIS_URL: redis://redis:6379/0
+      # The API container owns migrations; the worker must not race it.
+      RUN_MIGRATIONS: "false"
+    volumes:
+      - ./backend/app:/app/app
+    command: ["arq", "app.tasks.worker.WorkerSettings"]
+    # The image's healthcheck probes the HTTP port, which the worker doesn't serve.
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   frontend:
     container_name: calling-agent-frontend
     build:

@@ -2,7 +2,7 @@ import type { ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 're
 import { useId } from 'react'
 
 const CONTROL =
-  'mt-1.5 block w-full rounded-lg border-0 px-3 py-2 text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-brand-600'
+  'mt-1.5 block w-full rounded-xl border-0 bg-white px-3.5 py-2.5 text-sm text-ink-900 shadow-card ring-1 ring-inset ring-ink-200 transition-shadow placeholder:text-ink-400 focus:ring-2 focus:ring-inset focus:ring-brand-500'
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string
@@ -14,13 +14,13 @@ export function Select({ label, hint, children, className = '', ...props }: Sele
   const id = useId()
   return (
     <div className={className}>
-      <label htmlFor={id} className="block text-sm font-medium text-slate-700">
+      <label htmlFor={id} className="block text-xs font-medium text-ink-600">
         {label}
       </label>
       <select id={id} {...props} className={CONTROL}>
         {children}
       </select>
-      {hint && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1.5 text-xs leading-relaxed text-ink-400">{hint}</p>}
     </div>
   )
 }
@@ -34,11 +34,11 @@ export function TextArea({ label, hint, className = '', rows = 3, ...props }: Te
   const id = useId()
   return (
     <div className={className}>
-      <label htmlFor={id} className="block text-sm font-medium text-slate-700">
+      <label htmlFor={id} className="block text-xs font-medium text-ink-600">
         {label}
       </label>
       <textarea id={id} rows={rows} {...props} className={CONTROL} />
-      {hint && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1.5 text-xs leading-relaxed text-ink-400">{hint}</p>}
     </div>
   )
 }

@@ -4,18 +4,16 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/AppLayout'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { queryClient } from '@/lib/queryClient'
+import { AgentsPage } from '@/pages/AgentsPage'
+import { CallDetailPage, CallsPage } from '@/pages/CallsPage'
+import { CampaignDetailPage, CampaignsPage } from '@/pages/CampaignsPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { KnowledgePage } from '@/pages/KnowledgePage'
+import { LeadsPage } from '@/pages/LeadsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { RegisterPage } from '@/pages/RegisterPage'
-import {
-  AgentsPage,
-  CallsPage,
-  CampaignsPage,
-  KnowledgePage,
-  LeadsPage,
-  SettingsPage,
-} from '@/pages/modules'
+import { SettingsPage } from '@/pages/SettingsPage'
 
 export default function App() {
   return (
@@ -36,7 +34,9 @@ export default function App() {
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/leads" element={<LeadsPage />} />
             <Route path="/campaigns" element={<CampaignsPage />} />
+            <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
             <Route path="/calls" element={<CallsPage />} />
+            <Route path="/calls/:id" element={<CallDetailPage />} />
             <Route path="/knowledge" element={<KnowledgePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/404" element={<NotFoundPage />} />

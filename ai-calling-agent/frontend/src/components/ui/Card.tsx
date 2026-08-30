@@ -6,23 +6,32 @@ interface CardProps {
   actions?: ReactNode
   children: ReactNode
   className?: string
+  /** Removes the body padding — for tables that should reach the card edge. */
+  flush?: boolean
 }
 
-export function Card({ title, description, actions, children, className = '' }: CardProps) {
+export function Card({
+  title,
+  description,
+  actions,
+  children,
+  className = '',
+  flush = false,
+}: CardProps) {
   return (
     <section
-      className={`rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}
+      className={`animate-fade-up overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-ink-200/70 transition-shadow duration-200 hover:shadow-lift ${className}`}
     >
       {(title || actions) && (
-        <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
-          <div>
-            {title && <h2 className="text-sm font-semibold text-slate-900">{title}</h2>}
-            {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
+        <header className="flex items-start justify-between gap-4 border-b border-ink-100 px-5 py-4">
+          <div className="min-w-0">
+            {title && <h2 className="text-sm font-semibold text-ink-900">{title}</h2>}
+            {description && <p className="mt-1 text-xs leading-relaxed text-ink-500">{description}</p>}
           </div>
-          {actions}
+          {actions && <div className="shrink-0">{actions}</div>}
         </header>
       )}
-      <div className="px-5 py-4">{children}</div>
+      <div className={flush ? '' : 'px-5 py-4'}>{children}</div>
     </section>
   )
 }

@@ -30,6 +30,10 @@ class UsageRecord:
     unit: str
     quantity: float
     model: str | None = None
+    # ISO country of the destination. Telephony rates vary by an order of
+    # magnitude between countries, so a worldwide operation cannot price a
+    # call without knowing where it went.
+    region: str | None = None
 
 
 @dataclass(slots=True)

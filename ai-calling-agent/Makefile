@@ -16,11 +16,16 @@ t=pathlib.Path('.env.example').read_text(); \
 pathlib.Path('.env').write_text(re.sub(r'^SECRET_KEY=.*$$','SECRET_KEY='+secrets.token_urlsafe(48),t,flags=re.M))"
 	@echo "Wrote .env - review it, then run: make up"
 
+.PHONY: configure
+configure: ## Enter provider API keys. only=telephony to do one; show=1 to see typing
+	@python3 scripts/configure.py $(if $(only),--only $(only)) $(if $(show),--show)
+
 .PHONY: up
 up: ## Build and start the whole stack
 	$(COMPOSE) up -d --build
 	@echo "Dashboard  http://localhost:5173"
 	@echo "API docs   http://localhost:8000/docs"
+	@echo "Providers default to mocks - see docs/going-live.md to use real ones"
 
 .PHONY: down
 down: ## Stop the stack (keeps data)
@@ -41,6 +46,14 @@ logs: ## Tail logs from every service
 .PHONY: logs-api
 logs-api: ## Tail backend logs only
 	$(COMPOSE) logs -f backend
+
+.PHONY: logs-worker
+logs-worker: ## Tail worker logs (campaigns, post-call, ingestion)
+	$(COMPOSE) logs -f worker
+
+.PHONY: tunnel
+tunnel: ## Start a public tunnel and auto-update .env + the carrier webhook
+	@./scripts/tunnel.sh
 
 .PHONY: shell
 shell: ## Open a shell in the backend container

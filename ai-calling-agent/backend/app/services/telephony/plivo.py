@@ -37,7 +37,14 @@ class PlivoTelephonyProvider(TelephonyProvider):
         return settings.plivo_auth_id, settings.plivo_auth_token
 
     async def originate(
-        self, *, to_number: str, from_number: str, answer_url: str, status_url: str, call_id: str
+        self,
+        *,
+        to_number: str,
+        from_number: str,
+        answer_url: str,
+        status_url: str,
+        call_id: str,
+        record: bool = False,
     ) -> OriginateResult:
         auth = self._auth()
         body = {
@@ -49,7 +56,12 @@ class PlivoTelephonyProvider(TelephonyProvider):
             "hangup_method": "POST",
             "ring_url": status_url,
             "ring_method": "POST",
+            # Without this the carrier's own (often short) ring timeout applies.
+            "ring_timeout": settings.ring_timeout_seconds,
         }
+        if record:
+            body["record"] = True
+            body["record_file_format"] = "mp3"
         try:
             async with httpx.AsyncClient(timeout=20.0) as client:
                 response = await client.post(f"{API_BASE}/{auth[0]}/Call/", auth=auth, json=body)
@@ -91,6 +103,17 @@ class PlivoTelephonyProvider(TelephonyProvider):
             "</Response>"
         )
         return xml, "application/xml"
+
+    def is_inbound(self, payload: dict[str, Any]) -> bool:
+        direction = str(payload.get("Direction", payload.get("CallDirection", ""))).lower()
+        return direction in {"inbound", "incoming"} and bool(payload.get("CallUUID"))
+
+    def inbound_details(self, payload: dict[str, Any]) -> tuple[str, str, str]:
+        return (
+            str(payload.get("CallUUID", "")),
+            str(payload.get("From", "")),
+            str(payload.get("To", "")),
+        )
 
     def parse_webhook(self, payload: dict[str, Any]) -> TelephonyEvent:
         status = str(payload.get("CallStatus") or payload.get("Status") or "").lower()

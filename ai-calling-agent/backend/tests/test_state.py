@@ -15,9 +15,7 @@ from app.agents.state import ConversationState, customer_is_closing, next_state
         ("ok thank you bye", ConversationState.COMPLETE),
     ],
 )
-def test_customer_topic_wins_over_script_order(
-    text: str, expected: ConversationState
-) -> None:
+def test_customer_topic_wins_over_script_order(text: str, expected: ConversationState) -> None:
     assert next_state(ConversationState.INTRODUCTION, text, turn_count=1) is expected
 
 

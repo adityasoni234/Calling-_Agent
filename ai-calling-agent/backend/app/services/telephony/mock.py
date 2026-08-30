@@ -23,7 +23,14 @@ class MockTelephonyProvider(TelephonyProvider):
     name = "mock"
 
     async def originate(
-        self, *, to_number: str, from_number: str, answer_url: str, status_url: str, call_id: str
+        self,
+        *,
+        to_number: str,
+        from_number: str,
+        answer_url: str,
+        status_url: str,
+        call_id: str,
+        record: bool = False,
     ) -> OriginateResult:
         return OriginateResult(provider_call_id=f"mock-{uuid.uuid4().hex[:12]}")
 

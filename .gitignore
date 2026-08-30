@@ -1,0 +1,34 @@
+# Secrets — never commit these
+**/.env
+.env
+*.env
+!*.env.example
+!**/.env.example
+!**/.env.production.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Runtime
+uploads/
+*.log

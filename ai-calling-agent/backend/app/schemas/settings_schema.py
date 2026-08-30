@@ -16,6 +16,9 @@ class ProviderStatus(BaseModel):
 class SettingsRead(BaseModel):
     organization_name: str
     organization_timezone: str
+    daily_budget_usd: float | None = None
+    monthly_budget_usd: float | None = None
+    max_concurrent_calls: int | None = None
     providers: dict[str, ProviderStatus]
     llm_model: str
     embedding_model: str
@@ -30,6 +33,11 @@ class SettingsRead(BaseModel):
 class OrganizationUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=200)
     timezone: str | None = Field(default=None, max_length=64)
+    # 0 means no cap; null clears the override and falls back to the
+    # deployment-wide default.
+    daily_budget_usd: float | None = Field(default=None, ge=0, le=100000)
+    monthly_budget_usd: float | None = Field(default=None, ge=0, le=1000000)
+    max_concurrent_calls: int | None = Field(default=None, ge=1, le=200)
 
 
 class PricingRateCreate(BaseModel):

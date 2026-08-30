@@ -48,7 +48,14 @@ class TwilioTelephonyProvider(TelephonyProvider):
         return settings.twilio_account_sid, settings.twilio_auth_token
 
     async def originate(
-        self, *, to_number: str, from_number: str, answer_url: str, status_url: str, call_id: str
+        self,
+        *,
+        to_number: str,
+        from_number: str,
+        answer_url: str,
+        status_url: str,
+        call_id: str,
+        record: bool = False,
     ) -> OriginateResult:
         sid, token = self._auth()
         form = {
@@ -59,7 +66,16 @@ class TwilioTelephonyProvider(TelephonyProvider):
             "StatusCallback": status_url,
             "StatusCallbackMethod": "POST",
             "StatusCallbackEvent": ["initiated", "ringing", "answered", "completed"],
+            # Without this the carrier's own (often short) ring timeout applies,
+            # which gives a real person no time to reach the handset.
+            "Timeout": str(settings.ring_timeout_seconds),
         }
+        if record:
+            # Dual-channel keeps the customer and the agent on separate tracks,
+            # which makes the recording usable for QA and re-transcription.
+            form["Record"] = "true"
+            form["RecordingChannels"] = "dual"
+            form["RecordingStatusCallback"] = status_url
         try:
             async with httpx.AsyncClient(timeout=20.0) as client:
                 response = await client.post(
@@ -102,6 +118,20 @@ class TwilioTelephonyProvider(TelephonyProvider):
             "</Connect></Response>"
         )
         return xml, "application/xml"
+
+    def is_inbound(self, payload: dict[str, Any]) -> bool:
+        # Twilio posts the call's details to the number's Voice URL and expects
+        # TwiML back. `Direction` distinguishes it from our own outbound leg.
+        return str(payload.get("Direction", "")).lower() in {"inbound", "incoming"} and bool(
+            payload.get("CallSid")
+        )
+
+    def inbound_details(self, payload: dict[str, Any]) -> tuple[str, str, str]:
+        return (
+            str(payload.get("CallSid", "")),
+            str(payload.get("From", "")),
+            str(payload.get("To", "")),
+        )
 
     def parse_webhook(self, payload: dict[str, Any]) -> TelephonyEvent:
         status = str(payload.get("CallStatus", "")).lower()

@@ -2,21 +2,23 @@ import type { ReactNode } from 'react'
 
 export function Table({ headers, children }: { headers: string[]; children: ReactNode }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="-mx-5 overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-left">
-            {headers.map((header) => (
+          <tr className="border-y border-ink-100 bg-ink-50/60 text-left">
+            {headers.map((header, index) => (
               <th
-                key={header}
-                className="whitespace-nowrap px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500"
+                key={header || index}
+                className={`whitespace-nowrap py-2.5 text-2xs font-semibold uppercase tracking-wider text-ink-400 ${
+                  index === 0 ? 'pl-5 pr-3' : 'px-3'
+                }`}
               >
                 {header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">{children}</tbody>
+        <tbody className="divide-y divide-ink-100">{children}</tbody>
       </table>
     </div>
   )
@@ -24,9 +26,22 @@ export function Table({ headers, children }: { headers: string[]; children: Reac
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="py-12 text-center">
-      <p className="text-sm font-medium text-slate-700">{title}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+    <div className="py-16 text-center">
+      <div className="mx-auto mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-ink-100 text-ink-400">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          className="h-5 w-5"
+          aria-hidden
+        >
+          <path d="M4 7h16M4 12h10M4 17h7" />
+        </svg>
+      </div>
+      <p className="text-sm font-medium text-ink-800">{title}</p>
+      {hint && <p className="mx-auto mt-1.5 max-w-sm text-xs leading-relaxed text-ink-500">{hint}</p>}
     </div>
   )
 }
@@ -44,16 +59,16 @@ export function Pager({
 }) {
   if (total === 0) return null
   return (
-    <div className="flex items-center justify-between border-t border-slate-100 px-1 pt-3 text-xs text-slate-500">
+    <div className="flex items-center justify-between pt-4 text-xs text-ink-500">
       <span>
-        Page {page} of {Math.max(pages, 1)} · {total} total
+        Page {page} of {Math.max(pages, 1)} · <span className="tabular-nums">{total}</span> total
       </span>
       <div className="flex gap-2">
         <button
           type="button"
           disabled={page <= 1}
           onClick={() => onChange(page - 1)}
-          className="rounded px-2 py-1 ring-1 ring-slate-200 disabled:opacity-40 hover:bg-slate-50"
+          className="rounded-xl bg-white px-2.5 py-1.5 font-medium shadow-card ring-1 ring-ink-200 transition-colors hover:bg-ink-50 disabled:opacity-40 disabled:hover:bg-white"
         >
           Previous
         </button>
@@ -61,7 +76,7 @@ export function Pager({
           type="button"
           disabled={page >= pages}
           onClick={() => onChange(page + 1)}
-          className="rounded px-2 py-1 ring-1 ring-slate-200 disabled:opacity-40 hover:bg-slate-50"
+          className="rounded-xl bg-white px-2.5 py-1.5 font-medium shadow-card ring-1 ring-ink-200 transition-colors hover:bg-ink-50 disabled:opacity-40 disabled:hover:bg-white"
         >
           Next
         </button>

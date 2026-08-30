@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.call import Call, CallUsage
+from app.models.organization import Organization
 from app.models.pricing import PricingRate
 from app.services.base import UsageRecord
 
@@ -65,10 +66,17 @@ class CostService:
                     PricingRate.model.is_(None),
                     PricingRate.model == (record.model or ""),
                 ),
+                or_(
+                    PricingRate.region.is_(None),
+                    PricingRate.region == (record.region or ""),
+                ),
             )
             .order_by(
                 PricingRate.organization_id.is_(None),  # org-specific first
                 PricingRate.model.is_(None),  # model-specific first
+                # A rate for the destination country beats a global fallback:
+                # India and the UK differ by more than 6x per minute.
+                PricingRate.region.is_(None),
                 PricingRate.verified_at.desc(),
             )
             .limit(1)
@@ -103,6 +111,7 @@ class CostService:
                     provider=record.provider,
                     model=record.model,
                     unit=record.unit,
+                    region=record.region,
                     quantity=record.quantity,
                     cost_usd=cost,
                     priced=cost is not None,
@@ -118,6 +127,64 @@ class CostService:
             log.info("cost.incomplete", call_id=str(call.id), reason="missing verified rate")
         return total, incomplete
 
+    async def reprice(self, organization_id: uuid.UUID) -> dict[str, int | float]:
+        """Price usage lines that had no verified rate when they were recorded.
+
+        Rates are usually entered after the first calls have already run. Without
+        this, those calls would stay permanently incomplete even once the rate
+        exists.
+        """
+        rows = await self.db.execute(
+            select(CallUsage).where(
+                CallUsage.organization_id == organization_id, CallUsage.priced.is_(False)
+            )
+        )
+        touched_calls: set[uuid.UUID] = set()
+        priced_lines = 0
+
+        for line in rows.scalars():
+            record = UsageRecord(
+                component=line.component,
+                provider=line.provider,
+                unit=line.unit,
+                quantity=line.quantity,
+                model=line.model,
+                region=line.region,
+            )
+            rate = await self._find_rate(organization_id, record)
+            if rate is None:
+                continue
+            divisor = UNIT_DIVISOR.get(rate.unit, 1.0)
+            line.cost_usd = (line.quantity / divisor) * rate.rate
+            line.priced = True
+            priced_lines += 1
+            touched_calls.add(line.call_id)
+
+        # Recompute each affected call from its lines rather than adding deltas,
+        # so a repriced call cannot drift from the sum of its usage.
+        added = 0.0
+        for call_id in touched_calls:
+            call = await self.db.get(Call, call_id)
+            if call is None:
+                continue
+            lines = (
+                (await self.db.execute(select(CallUsage).where(CallUsage.call_id == call_id)))
+                .scalars()
+                .all()
+            )
+            total = sum(line.cost_usd or 0.0 for line in lines)
+            added += total - (call.cost_usd or 0.0)
+            call.cost_usd = round(total, 6)
+            call.cost_incomplete = any(not line.priced for line in lines)
+
+        await self.db.commit()
+        log.info("cost.repriced", lines=priced_lines, calls=len(touched_calls))
+        return {
+            "lines_priced": priced_lines,
+            "calls_updated": len(touched_calls),
+            "cost_added_usd": round(added, 6),
+        }
+
     # --- budgets -------------------------------------------------------
 
     async def spend_since(self, organization_id: uuid.UUID, since: datetime) -> float:
@@ -132,8 +199,20 @@ class CostService:
         now = datetime.now(UTC)
         daily = await self.spend_since(organization_id, now - timedelta(days=1))
         monthly = await self.spend_since(organization_id, now - timedelta(days=30))
-        daily_limit = settings.daily_budget_usd
-        monthly_limit = settings.monthly_budget_usd
+
+        # A limit set on the organization wins; otherwise fall back to the
+        # deployment-wide value so an unconfigured tenant is still covered.
+        organization = await self.db.get(Organization, organization_id)
+        daily_limit = (
+            organization.daily_budget_usd
+            if organization and organization.daily_budget_usd is not None
+            else settings.daily_budget_usd
+        )
+        monthly_limit = (
+            organization.monthly_budget_usd
+            if organization and organization.monthly_budget_usd is not None
+            else settings.monthly_budget_usd
+        )
         return {
             "daily_spend": round(daily, 4),
             "monthly_spend": round(monthly, 4),

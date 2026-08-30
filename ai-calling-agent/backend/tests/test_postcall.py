@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from pydantic import ValidationError
 from sqlalchemy import select
 
 from app.models.call import Call, CallStatus, CallTurn
@@ -24,8 +25,10 @@ TRANSCRIPT = [
 @pytest.fixture
 async def completed_call(db_session, agent: dict, lead: dict, auth_headers: dict) -> Call:
     user = (
-        await db_session.execute(select(User).where(User.email == "owner@example.com"))
-    ).unique().scalar_one()
+        (await db_session.execute(select(User).where(User.email == "owner@example.com")))
+        .unique()
+        .scalar_one()
+    )
     call = Call(
         organization_id=user.organization_id,
         agent_id=uuid.UUID(agent["id"]),
@@ -55,8 +58,13 @@ async def test_extraction_populates_summary_and_structured_data(
     assert completed_call.extracted_data is not None
     # Every field the spec requires is present in the stored payload.
     for field in (
-        "requirement", "budget", "timeline", "interest_level",
-        "objections", "follow_up_required", "lead_score",
+        "requirement",
+        "budget",
+        "timeline",
+        "interest_level",
+        "objections",
+        "follow_up_required",
+        "lead_score",
     ):
         assert field in completed_call.extracted_data
 
@@ -74,8 +82,10 @@ async def test_extraction_updates_the_lead(db_session, completed_call: Call) -> 
 
 async def test_an_empty_transcript_is_not_summarised(db_session, agent: dict) -> None:
     user = (
-        await db_session.execute(select(User).where(User.email == "owner@example.com"))
-    ).unique().scalar_one()
+        (await db_session.execute(select(User).where(User.email == "owner@example.com")))
+        .unique()
+        .scalar_one()
+    )
     call = Call(
         organization_id=user.organization_id,
         agent_id=uuid.UUID(agent["id"]),
@@ -91,7 +101,7 @@ async def test_an_empty_transcript_is_not_summarised(db_session, agent: dict) ->
 
 
 def test_extraction_schema_rejects_an_out_of_range_score() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         CallExtraction(lead_score=250)
 
 
@@ -104,9 +114,7 @@ def test_extraction_schema_coerces_loose_model_output() -> None:
     assert extraction.objections == ["too expensive"]
 
 
-async def test_a_do_not_call_lead_is_never_re_enabled(
-    db_session, completed_call: Call
-) -> None:
+async def test_a_do_not_call_lead_is_never_re_enabled(db_session, completed_call: Call) -> None:
     lead = await db_session.get(Lead, completed_call.lead_id)
     lead.status = LeadStatus.DO_NOT_CALL
     await db_session.commit()
@@ -119,9 +127,7 @@ async def test_a_do_not_call_lead_is_never_re_enabled(
 async def test_reprocess_endpoint(
     client: AsyncClient, auth_headers: dict, completed_call: Call
 ) -> None:
-    response = await client.post(
-        f"/calls/{completed_call.id}/reprocess", headers=auth_headers
-    )
+    response = await client.post(f"/calls/{completed_call.id}/reprocess", headers=auth_headers)
     assert response.status_code == 200
 
     detail = await client.get(f"/calls/{completed_call.id}", headers=auth_headers)

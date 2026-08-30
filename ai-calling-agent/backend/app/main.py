@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app import __version__
 from app.api.v1.router import api_router
@@ -52,6 +53,11 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+
+# Behind Render/Railway/Fly the app sits behind a proxy, so the scheme and
+# client IP arrive in X-Forwarded-* headers. Without this, generated URLs come
+# out as http:// and rate limiting sees the proxy's address.
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 app.add_middleware(
     CORSMiddleware,

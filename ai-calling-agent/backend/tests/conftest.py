@@ -83,7 +83,9 @@ AGENT_PAYLOAD = {
     "primary_objective": "Book a product demo",
     "language": "auto",
     "qualification_questions": ["What is your monthly call volume?"],
-    "objection_handling": [{"objection": "too expensive", "response": "We start from a small plan."}],
+    "objection_handling": [
+        {"objection": "too expensive", "response": "We start from a small plan."}
+    ],
     "forbidden_rules": ["Never promise a discount"],
     "ending_rules": ["End once a demo is booked"],
     "voice_config": {"voice_id": "test-voice", "language": "en"},

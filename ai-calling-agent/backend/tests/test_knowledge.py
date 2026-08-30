@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
 from httpx import AsyncClient
 
+from app.core.errors import ValidationFailedError
 from app.services.knowledge.chunker import chunk_text, normalize
 from app.services.knowledge.extract import detect_kind
 from app.services.knowledge.retriever import cosine_similarity
-
-import pytest
-
-from app.core.errors import ValidationFailedError
 
 
 def test_chunker_splits_on_paragraphs_and_overlaps() -> None:
@@ -47,9 +45,7 @@ def test_cosine_similarity() -> None:
 
 
 async def test_faq_ingest_then_retrieve(client: AsyncClient, auth_headers: dict[str, str]) -> None:
-    kb = await client.post(
-        "/knowledge", json={"name": "Product FAQ"}, headers=auth_headers
-    )
+    kb = await client.post("/knowledge", json={"name": "Product FAQ"}, headers=auth_headers)
     assert kb.status_code == 201
     kb_id = kb.json()["id"]
 
@@ -78,9 +74,9 @@ async def test_faq_ingest_then_retrieve(client: AsyncClient, auth_headers: dict[
 async def test_markdown_upload_is_chunked_and_searchable(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
-    kb_id = (
-        await client.post("/knowledge", json={"name": "Docs"}, headers=auth_headers)
-    ).json()["id"]
+    kb_id = (await client.post("/knowledge", json={"name": "Docs"}, headers=auth_headers)).json()[
+        "id"
+    ]
 
     content = (
         b"# Refund policy\n\nRefunds are processed within seven working days.\n\n"
@@ -100,9 +96,9 @@ async def test_markdown_upload_is_chunked_and_searchable(
 async def test_unsupported_upload_is_rejected(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
-    kb_id = (
-        await client.post("/knowledge", json={"name": "Docs"}, headers=auth_headers)
-    ).json()["id"]
+    kb_id = (await client.post("/knowledge", json={"name": "Docs"}, headers=auth_headers)).json()[
+        "id"
+    ]
     response = await client.post(
         f"/knowledge/{kb_id}/documents",
         files={"file": ("image.png", b"\x89PNG", "image/png")},

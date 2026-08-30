@@ -25,7 +25,9 @@ from app.services.stt.deepgram import DeepgramSTTProvider
 from app.services.stt.mock import MockSTTProvider
 from app.services.telephony.base import TelephonyProvider
 from app.services.telephony.mock import MockTelephonyProvider
+from app.services.telephony.omnidimension import OmniDimensionTelephonyProvider
 from app.services.telephony.plivo import PlivoTelephonyProvider
+from app.services.telephony.telnyx import TelnyxTelephonyProvider
 from app.services.telephony.twilio import TwilioTelephonyProvider
 from app.services.tts.base import TTSProvider
 from app.services.tts.cartesia import CartesiaTTSProvider
@@ -37,6 +39,8 @@ TELEPHONY: dict[str, Callable[[], TelephonyProvider]] = {
     "mock": MockTelephonyProvider,
     "plivo": PlivoTelephonyProvider,
     "twilio": TwilioTelephonyProvider,
+    "telnyx": TelnyxTelephonyProvider,
+    "omnidimension": OmniDimensionTelephonyProvider,
 }
 
 STT: dict[str, Callable[[], STTProvider]] = {
@@ -110,6 +114,10 @@ def provider_status() -> dict[str, dict[str, Any]]:
             {
                 "plivo": bool(settings.plivo_auth_id and settings.plivo_auth_token),
                 "twilio": bool(settings.twilio_account_sid and settings.twilio_auth_token),
+                "telnyx": bool(settings.telnyx_api_key and settings.telnyx_connection_id),
+                "omnidimension": bool(
+                    settings.omnidimension_api_key and settings.omnidimension_agent_id
+                ),
                 "mock": True,
             },
             sorted(TELEPHONY),

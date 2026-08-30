@@ -4,16 +4,18 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'sm' | 'md'
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 focus-visible:outline-brand-600',
+  primary:
+    'bg-brand-sheen text-white shadow-glow hover:brightness-[1.07] active:brightness-95 focus-visible:outline-brand-600',
   secondary:
-    'bg-white text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus-visible:outline-slate-400',
-  ghost: 'text-slate-600 hover:bg-slate-100 focus-visible:outline-slate-400',
-  danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:outline-red-600',
+    'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 shadow-card hover:bg-ink-50 hover:ring-ink-300 focus-visible:outline-ink-400',
+  ghost: 'text-ink-500 hover:bg-ink-100 hover:text-ink-800 focus-visible:outline-ink-400',
+  danger:
+    'bg-red-600 text-white shadow-card hover:bg-red-700 active:bg-red-800 focus-visible:outline-red-600',
 }
 
 const SIZES: Record<Size, string> = {
-  sm: 'px-2.5 py-1.5 text-xs',
-  md: 'px-3.5 py-2 text-sm',
+  sm: 'px-2.5 py-1.5 text-xs gap-1.5',
+  md: 'px-4 py-2.5 text-sm gap-2',
 }
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -36,7 +38,7 @@ export function Button({
     <button
       {...props}
       disabled={disabled ?? loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+      className={`inline-flex select-none items-center justify-center rounded-xl font-medium transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
     >
       {loading && (
         <span

@@ -58,11 +58,15 @@ class AnthropicLLMProvider(LLMProvider):
     def _headers(self) -> dict[str, str]:
         if not settings.anthropic_api_key:
             raise ProviderError("anthropic", "ANTHROPIC_API_KEY is not set")
-        return {
+        headers = {
             "x-api-key": settings.anthropic_api_key,
             "anthropic-version": API_VERSION,
             "content-type": "application/json",
         }
+        # Identity-linked keys are rejected without this; ordinary keys ignore it.
+        if settings.anthropic_workspace_id:
+            headers["anthropic-workspace-id"] = settings.anthropic_workspace_id
+        return headers
 
     async def stream_chat(  # type: ignore[override]
         self,

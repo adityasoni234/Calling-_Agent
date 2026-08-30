@@ -68,3 +68,41 @@ def test_cors_origins_parse_from_a_comma_separated_string() -> None:
 
     settings = Settings(cors_origins="http://a.test, http://b.test ,")
     assert settings.cors_origin_list == ["http://a.test", "http://b.test"]
+
+
+def test_test_settings_ignore_the_developers_env_file(tmp_path, monkeypatch) -> None:
+    """A key added to a local .env must not change how the suite behaves."""
+    from app.core.config import Settings
+
+    monkeypatch.setenv("APP_ENV", "test")
+    settings = Settings()
+    # Nothing from the repo .env should reach a test run.
+    assert settings.telephony_webhook_secret == ""
+    assert settings.twilio_auth_token == ""
+    assert settings.anthropic_api_key == ""
+
+
+def test_production_refuses_a_localhost_public_url() -> None:
+    """A carrier cannot fetch an answer document from localhost.
+
+    Booting anyway means every call fails with no obvious cause, so this is a
+    startup error rather than a runtime surprise.
+    """
+    import pytest
+
+    from app.core.config import Settings
+
+    base = {
+        "app_env": "production",
+        "debug": False,
+        "secret_key": "x" * 40,
+        "cors_origins": "https://app.example.com",
+        "telephony_provider": "twilio",
+    }
+
+    with pytest.raises(ValueError, match="PUBLIC_BASE_URL"):
+        Settings(**base, public_base_url="http://localhost:8000")
+
+    # Mock telephony never calls out, so it is allowed.
+    Settings(**{**base, "telephony_provider": "mock"}, public_base_url="http://localhost:8000")
+    Settings(**base, public_base_url="https://api.example.com")

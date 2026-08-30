@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from datetime import UTC, datetime
 
@@ -23,7 +24,9 @@ from app.models.lead import Lead
 from app.services.base import ProviderError
 from app.services.cost_service import CostService
 from app.services.registry import get_telephony
+from app.services.telephony import urls
 from app.services.telephony.base import TelephonyEvent
+from app.services.telephony.region import region_of
 
 log = get_logger(__name__)
 
@@ -33,11 +36,11 @@ class CallService:
         self.db = db
 
     def _urls(self, call_id: uuid.UUID, provider: str) -> tuple[str, str, str]:
-        base = settings.public_base_url.rstrip("/")
-        answer = f"{base}/api/v1/webhooks/telephony/{provider}/answer/{call_id}"
-        status = f"{base}/api/v1/webhooks/telephony/{provider}/status/{call_id}"
-        websocket = base.replace("https://", "wss://").replace("http://", "ws://")
-        return answer, status, f"{websocket}/api/v1/media/{call_id}"
+        return (
+            urls.answer_url(provider, call_id),
+            urls.status_url(provider, call_id),
+            urls.media_url(call_id),
+        )
 
     async def create_and_originate(
         self,
@@ -96,6 +99,7 @@ class CallService:
                 answer_url=answer_url,
                 status_url=status_url,
                 call_id=str(call.id),
+                record=agent.record_calls,
             )
             call.provider_call_id = result.provider_call_id
             call.status = result.status
@@ -118,7 +122,59 @@ class CallService:
         return {
             "plivo": settings.plivo_caller_id,
             "twilio": settings.twilio_caller_id,
+            "telnyx": settings.telnyx_caller_id,
         }.get(provider_name, "+10000000000")
+
+    async def accept_inbound(
+        self, *, provider: str, provider_call_id: str, from_number: str, to_number: str
+    ) -> Call | None:
+        """Create a call record for someone dialling in, and pick up.
+
+        The agent is chosen by `INBOUND_AGENT_ID`, falling back to the first
+        active agent -- a single-agent deployment should not need configuration
+        to answer its own phone.
+        """
+        agent = None
+        if settings.inbound_agent_id:
+            with contextlib.suppress(ValueError):
+                agent = await self.db.get(Agent, uuid.UUID(settings.inbound_agent_id))
+        if agent is None:
+            result = await self.db.execute(
+                select(Agent).where(Agent.is_active.is_(True)).order_by(Agent.created_at).limit(1)
+            )
+            agent = result.scalars().first()
+        if agent is None:
+            log.warning("call.inbound_no_agent", provider_call_id=provider_call_id)
+            return None
+
+        # Match the caller to an existing lead so the call joins their history.
+        lead = None
+        if from_number:
+            result = await self.db.execute(
+                select(Lead).where(
+                    Lead.organization_id == agent.organization_id,
+                    Lead.phone_number == from_number,
+                )
+            )
+            lead = result.scalars().first()
+
+        call = Call(
+            organization_id=agent.organization_id,
+            agent_id=agent.id,
+            lead_id=lead.id if lead else None,
+            direction=CallDirection.INBOUND,
+            provider=provider,
+            provider_call_id=provider_call_id,
+            from_number=from_number,
+            to_number=to_number,
+            status=CallStatus.RINGING,
+            started_at=datetime.now(UTC),
+        )
+        self.db.add(call)
+        await self.db.commit()
+        await self.db.refresh(call)
+        log.info("call.inbound", call_id=str(call.id), from_number=from_number, agent=agent.name)
+        return call
 
     async def by_provider_call_id(self, provider_call_id: str) -> Call | None:
         result = await self.db.execute(
@@ -160,7 +216,11 @@ class CallService:
         if call.duration_seconds > 0:
             provider = get_telephony(call.provider)
             await CostService(self.db).record_usage(
-                call=call, records=[provider.usage_for_call(call.duration_seconds)], commit=False
+                call=call,
+                records=[
+                    provider.usage_for_call(call.duration_seconds, region=region_of(call.to_number))
+                ],
+                commit=False,
             )
 
     async def end_call(self, call: Call, *, reason: str = "hangup") -> Call:

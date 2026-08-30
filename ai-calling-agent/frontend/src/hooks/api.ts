@@ -1,13 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import type {
   Agent,
+  AgentDraftResponse,
   AnalyticsBundle,
   Call,
   CallDetail,
   Campaign,
   CampaignDetail,
+  CampaignLeadRow,
   ImportResult,
   KnowledgeBase,
   KnowledgeDocument,
@@ -66,6 +69,13 @@ export function useAgentPrompt(id: string | undefined) {
     queryKey: ['agents', id, 'prompt'],
     queryFn: () => api.get<PromptPreview>(`/agents/${id}/prompt`),
     enabled: Boolean(id),
+  })
+}
+
+export function useGenerateAgent() {
+  return useMutation({
+    mutationFn: (body: { brief: string; company_name?: string; language?: string }) =>
+      api.post<AgentDraftResponse>('/agents/generate', body),
   })
 }
 
@@ -143,6 +153,22 @@ export function useCampaign(id: string | undefined) {
   })
 }
 
+export function useCampaignLeads(id: string | undefined, page = 1) {
+  return useQuery({
+    queryKey: ['campaigns', id, 'leads', page],
+    queryFn: () => api.get<Page<CampaignLeadRow>>(`/campaigns/${id}/leads?page=${page}&page_size=25`),
+    enabled: Boolean(id),
+  })
+}
+
+export function useLead(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ['leads', id],
+    queryFn: () => api.get<Lead>(`/leads/${id}`),
+    enabled: Boolean(id),
+  })
+}
+
 export function useCreateCampaign() {
   const client = useQueryClient()
   return useMutation({
@@ -199,6 +225,31 @@ export function usePlaceCall() {
     mutationFn: (body: { agent_id: string; lead_id?: string; to_number?: string }) =>
       api.post<Call>('/calls', body),
     onSuccess: () => client.invalidateQueries({ queryKey: ['calls'] }),
+  })
+}
+
+/**
+ * Fetch a call recording as a blob URL.
+ *
+ * An `<audio src>` cannot send an Authorization header, and putting the access
+ * token in the URL would leak it into history and logs -- so the audio is
+ * fetched with the header and handed to the player as an object URL.
+ */
+export function useRecording(callId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['calls', callId, 'recording'],
+    queryFn: async () => {
+      const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
+      const token = useAuthStore.getState().tokens?.access_token
+      const response = await fetch(`${base}/calls/${callId}/recording`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!response.ok) throw new Error('Recording is not available yet')
+      return URL.createObjectURL(await response.blob())
+    },
+    enabled,
+    staleTime: Infinity,
+    retry: false,
   })
 }
 
@@ -293,10 +344,36 @@ export function usePlatformSettings() {
   })
 }
 
+export function useUpdateOrganization() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: {
+      daily_budget_usd?: number | null
+      monthly_budget_usd?: number | null
+      max_concurrent_calls?: number | null
+    }) => api.patch('/settings/organization', body),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['settings'] }),
+  })
+}
+
 export function usePricingRates() {
   return useQuery({
     queryKey: ['settings', 'pricing'],
     queryFn: () => api.get<PricingRate[]>('/settings/pricing'),
+  })
+}
+
+export function useRepriceCalls() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ lines_priced: number; calls_updated: number; cost_added_usd: number }>(
+        '/settings/pricing/reprice',
+      ),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['calls'] })
+      client.invalidateQueries({ queryKey: ['analytics'] })
+    },
   })
 }
 

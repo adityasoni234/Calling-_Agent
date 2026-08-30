@@ -24,6 +24,9 @@ export interface UserWithOrganization extends User {
   organization: Organization
 }
 
+/** Login returns a bare user; /auth/me enriches it with the organization. */
+export type AuthUser = User & { organization?: Organization }
+
 export interface TokenPair {
   access_token: string
   refresh_token: string
@@ -100,6 +103,8 @@ export interface Agent {
   silence_prompt_ms: number
   silence_hangup_ms: number
   interruptible: boolean
+  ask_language_preference: boolean
+  record_calls: boolean
   knowledge_base_id: string | null
   is_active: boolean
   created_at: string
@@ -309,6 +314,9 @@ export interface ProviderStatus {
 export interface PlatformSettings {
   organization_name: string
   organization_timezone: string
+  daily_budget_usd: number | null
+  monthly_budget_usd: number | null
+  max_concurrent_calls: number | null
   providers: Record<string, ProviderStatus>
   llm_model: string
   embedding_model: string
@@ -330,4 +338,18 @@ export interface PricingRate {
   source_url: string
   verified_at: string
   is_active: boolean
+}
+
+export interface AgentDraftResponse {
+  draft: Partial<Agent>
+  notes: string
+}
+
+export interface CampaignLeadRow {
+  id: string
+  lead_id: string
+  status: 'pending' | 'dialing' | 'completed' | 'failed' | 'exhausted' | 'skipped'
+  attempts: number
+  last_attempt_at: string | null
+  next_attempt_at: string | null
 }

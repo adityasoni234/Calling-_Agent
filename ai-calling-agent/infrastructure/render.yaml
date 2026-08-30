@@ -1,0 +1,131 @@
+# Render blueprint for the backend, worker, Postgres and Redis.
+#   1. Push this repo to GitHub
+#   2. Render -> New -> Blueprint -> pick the repo
+#   3. Fill the provider keys marked `sync: false`
+#
+# Postgres here is Render's managed instance, which ships with pgvector.
+services:
+  - type: web
+    name: calling-agent-api
+    runtime: docker
+    dockerfilePath: ./ai-calling-agent/backend/Dockerfile
+    dockerContext: ./ai-calling-agent/backend
+    healthCheckPath: /api/v1/health
+    plan: starter
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: LOG_JSON
+        value: "true"
+      - key: ALLOW_REGISTRATION
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: calling-agent-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: calling-agent-redis
+          property: connectionString
+      # Must be the Render URL of this service; carriers call back on it.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      # Firebase serves the same site on both hostnames; both must be listed.
+      - key: CORS_ORIGINS
+        value: https://stockvala-agent.web.app,https://stockvala-agent.firebaseapp.com
+      - key: TELEPHONY_WEBHOOK_SECRET
+        generateValue: true
+      - key: TELEPHONY_PROVIDER
+        value: twilio
+      - key: STT_PROVIDER
+        value: deepgram
+      - key: LLM_PROVIDER
+        value: anthropic
+      - key: TTS_PROVIDER
+        value: cartesia
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_CALLER_ID
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_WORKSPACE_ID
+        sync: false
+      - key: CARTESIA_API_KEY
+        sync: false
+      - key: TTS_VOICE_ID
+        sync: false
+
+  - type: worker
+    name: calling-agent-worker
+    runtime: docker
+    dockerfilePath: ./ai-calling-agent/backend/Dockerfile
+    dockerContext: ./ai-calling-agent/backend
+    plan: starter
+    dockerCommand: arq app.tasks.worker.WorkerSettings
+    envVars:
+      # The web service owns migrations; the worker must not race it.
+      - key: RUN_MIGRATIONS
+        value: "false"
+      - key: APP_ENV
+        value: production
+      - key: LOG_JSON
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: calling-agent-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: calling-agent-redis
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: calling-agent-api
+          envVarKey: SECRET_KEY
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: TELEPHONY_PROVIDER
+        value: twilio
+      - key: STT_PROVIDER
+        value: deepgram
+      - key: LLM_PROVIDER
+        value: anthropic
+      - key: TTS_PROVIDER
+        value: cartesia
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_CALLER_ID
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_WORKSPACE_ID
+        sync: false
+      - key: CARTESIA_API_KEY
+        sync: false
+
+  - type: redis
+    name: calling-agent-redis
+    plan: starter
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+databases:
+  - name: calling-agent-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"

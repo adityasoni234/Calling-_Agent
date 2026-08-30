@@ -38,6 +38,9 @@ async def read_settings(db: DbSession, user: CurrentUser) -> SettingsRead:
     return SettingsRead(
         organization_name=organization.name,
         organization_timezone=organization.timezone,
+        daily_budget_usd=organization.daily_budget_usd,
+        monthly_budget_usd=organization.monthly_budget_usd,
+        max_concurrent_calls=organization.max_concurrent_calls,
         providers={kind: ProviderStatus(**value) for kind, value in providers.items()},
         llm_model=app_settings.llm_model,
         embedding_model=app_settings.embedding_model,
@@ -55,9 +58,10 @@ async def update_organization(
     organization = await db.get(Organization, user.organization_id)
     if organization is None:
         raise NotFoundError("Organization not found")
+    # exclude_unset, not a None check: an explicit null clears an override and
+    # returns the tenant to the deployment default.
     for field, value in payload.model_dump(exclude_unset=True).items():
-        if value is not None:
-            setattr(organization, field, value)
+        setattr(organization, field, value)
     await db.commit()
     await db.refresh(organization)
     return OrganizationRead.model_validate(organization)
@@ -108,6 +112,13 @@ async def create_rate(
     await db.commit()
     await db.refresh(rate)
     return PricingRateRead(id=str(rate.id), is_active=rate.is_active, **payload.model_dump())
+
+
+@router.post("/pricing/reprice", summary="Apply new rates to previously unpriced usage")
+async def reprice(db: DbSession, user: CurrentUser) -> dict[str, int | float]:
+    """Rates are usually entered after the first calls have run. This completes
+    those calls instead of leaving them permanently flagged."""
+    return await CostService(db).reprice(user.organization_id)
 
 
 @router.delete("/pricing/{rate_id}", response_model=MessageResponse, summary="Deactivate a rate")

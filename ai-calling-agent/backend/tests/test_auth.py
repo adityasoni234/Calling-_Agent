@@ -165,3 +165,16 @@ async def test_organization_slugs_stay_unique(client: AsyncClient, registered: d
     )
     assert response.status_code == 201
     assert response.json()["user"]["organization_id"] != registered["user"]["organization_id"]
+
+
+async def test_seed_script_applies_the_same_password_policy_as_the_api() -> None:
+    """The CLI must not be a way around the password rules.
+
+    An account created by `make seed` is reachable from the internet the moment
+    a tunnel is running, so a weak password here is a real exposure.
+    """
+    from scripts.seed import seed
+
+    assert await seed("someone@example.com", "12345678", "Weak", "Weak Co") == 2
+    assert await seed("someone@example.com", "short1!", "Short", "Short Co") == 2
+    assert await seed("someone@example.com", "correct-horse-9", "Fine", "Fine Co") == 0

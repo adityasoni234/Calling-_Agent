@@ -63,6 +63,7 @@ class CallUsageRead(BaseModel):
     provider: str
     model: str | None
     unit: str
+    region: str | None
     quantity: float
     cost_usd: float | None
     priced: bool

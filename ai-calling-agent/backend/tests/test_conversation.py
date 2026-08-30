@@ -36,7 +36,12 @@ class SlowTTS(TTSProvider):
     name = "slow"
 
     async def stream(  # type: ignore[override]
-        self, text: str, *, voice_config: dict[str, Any], sample_rate: int = 8000, encoding: str = "mulaw"
+        self,
+        text: str,
+        *,
+        voice_config: dict[str, Any],
+        sample_rate: int = 8000,
+        encoding: str = "mulaw",
     ) -> AsyncIterator[bytes]:
         for _ in range(200):
             await asyncio.sleep(0.01)
@@ -49,6 +54,7 @@ class ScriptedSTT(STTSession):
     def __init__(self, script: list[tuple[float, STTEvent]]) -> None:
         self.script = script
         self.closed = False
+        self._closed_event = asyncio.Event()
 
     async def send_audio(self, chunk: bytes) -> None:
         return None
@@ -59,11 +65,11 @@ class ScriptedSTT(STTSession):
                 return
             await asyncio.sleep(delay)
             yield event
-        while not self.closed:
-            await asyncio.sleep(0.05)
+        await self._closed_event.wait()
 
     async def close(self) -> None:
         self.closed = True
+        self._closed_event.set()
 
     @property
     def usage(self) -> list:
@@ -211,7 +217,8 @@ async def test_usage_is_recorded_for_every_component() -> None:
         pace_audio=False,
     )
     task = asyncio.create_task(manager.run())
-    await asyncio.sleep(0.5)
+    # Long enough for the turn debounce plus a reply.
+    await asyncio.sleep(1.4)
     await manager.stop("test")
     result = await asyncio.wait_for(task, timeout=3)
 
@@ -229,10 +236,12 @@ async def test_retrieval_runs_only_when_the_turn_needs_facts() -> None:
         calls.append(query)
         return ["Our starter plan covers one thousand minutes."], []
 
+    # Spaced beyond the debounce so these stay two separate turns; finals that
+    # arrive closer together are deliberately merged into one utterance.
     stt = ScriptedSTT(
         [
             (0.05, STTEvent(STTEventType.FINAL, text="haan ji")),
-            (0.35, STTEvent(STTEventType.FINAL, text="pricing kitna hai?")),
+            (1.2, STTEvent(STTEventType.FINAL, text="pricing kitna hai?")),
         ]
     )
     manager = ConversationManager(
@@ -245,7 +254,7 @@ async def test_retrieval_runs_only_when_the_turn_needs_facts() -> None:
         pace_audio=False,
     )
     task = asyncio.create_task(manager.run())
-    await asyncio.sleep(1.2)
+    await asyncio.sleep(2.6)
     await manager.stop("test")
     await asyncio.wait_for(task, timeout=3)
 
@@ -284,3 +293,43 @@ async def test_mock_stt_session_scripts_turns_from_audio() -> None:
 )
 def test_knowledge_gate(text: str, expected: bool) -> None:
     assert ConversationManager._needs_knowledge(text) is expected
+
+
+def test_greeting_survives_a_template_without_spaces() -> None:
+    """A missing space around {name} is audible in the first second of a call."""
+    from app.agents.prompt import build_greeting
+
+    agent = make_agent(greeting="Namaste{name}, main Riya bol rahi hoon.")
+    assert build_greeting(agent, "Aditya Soni") == "Namaste Aditya Soni, main Riya bol rahi hoon."
+    # No lead name must not strand a comma or leave a double space.
+    assert build_greeting(agent, None) == "Namaste, main Riya bol rahi hoon."
+    assert build_greeting(agent, "  ") == "Namaste, main Riya bol rahi hoon."
+
+
+async def test_fragmented_finals_are_merged_into_one_utterance() -> None:
+    """Deepgram splits a spoken sentence across several finals.
+
+    Answering each fragment separately makes the agent interrupt itself and skip
+    turns, which is exactly what happened on the first live call.
+    """
+    stt = ScriptedSTT(
+        [
+            (0.05, STTEvent(STTEventType.FINAL, text="haan boliye")),
+            (0.15, STTEvent(STTEventType.FINAL, text="kaun bol raha hai?")),
+        ]
+    )
+    manager = ConversationManager(
+        agent=make_agent(),
+        stt=stt,
+        llm=MockLLMProvider(),
+        tts=SlowTTS(),
+        sink=RecordingSink(),
+        pace_audio=False,
+    )
+    task = asyncio.create_task(manager.run())
+    await asyncio.sleep(1.4)
+    await manager.stop("test")
+    result = await asyncio.wait_for(task, timeout=3)
+
+    customer_turns = [turn.content for turn in result.turns if turn.role == "customer"]
+    assert customer_turns == ["haan boliye kaun bol raha hai?"]

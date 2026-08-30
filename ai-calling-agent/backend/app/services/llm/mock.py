@@ -78,6 +78,42 @@ class MockLLMProvider(LLMProvider):
         model: str | None = None,
         max_tokens: int = 900,
     ) -> tuple[dict[str, Any], list[UsageRecord]]:
+        properties = (schema or {}).get("properties", {})
+
+        # Agent blueprint: the builder asks for a persona, not call analysis.
+        if "primary_objective" in properties:
+            payload = {
+                "name": "Riya",
+                "role_title": "Sales Executive",
+                "personality": "Warm, direct and never pushy.",
+                "primary_objective": "Book a fifteen minute demo",
+                "secondary_objectives": ["Find out which tool they use today"],
+                "greeting": "Namaste, main Riya bol rahi hoon. Do minute baat kar sakte hain?",
+                "qualification_questions": ["Abhi aap kaunsa platform use karte hain?"],
+                "forbidden_rules": ["Never promise guaranteed returns"],
+                "ending_rules": ["End once a demo is booked"],
+                "objection_handling": [
+                    {
+                        "objection": "too expensive",
+                        "response": "Chhote plan se shuru kar sakte hain.",
+                    }
+                ],
+                "language": "auto",
+            }
+            usage = [
+                UsageRecord(
+                    UsageComponent.LLM, "mock", "token_in", _estimate_tokens(prompt), "mock"
+                ),
+                UsageRecord(
+                    UsageComponent.LLM,
+                    "mock",
+                    "token_out",
+                    _estimate_tokens(json.dumps(payload)),
+                    "mock",
+                ),
+            ]
+            return payload, usage
+
         lowered = prompt.lower()
         email = _EMAIL.search(prompt)
         interested = "interested" in lowered or "bilkul" in lowered

@@ -24,6 +24,7 @@ dependencies = [
     "arq>=0.26.1",
     "pypdf>=5.1.0",
     "python-docx>=1.1.2",
+    "phonenumbers>=8.13.50",
 ]
 
 [project.optional-dependencies]

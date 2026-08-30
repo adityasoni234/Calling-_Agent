@@ -62,6 +62,12 @@ class Agent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     silence_prompt_ms: Mapped[int] = mapped_column(Integer, default=6000)
     silence_hangup_ms: Mapped[int] = mapped_column(Integer, default=12000)
     interruptible: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Open the call by asking which language the customer prefers, then hold to
+    # it. Costs one turn and consistently improves how the rest of the call goes.
+    ask_language_preference: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Ask the carrier to record the call. Consent rules vary by jurisdiction --
+    # in India two-party consent applies, so the agent announces it.
+    record_calls: Mapped[bool] = mapped_column(Boolean, default=True)
 
     knowledge_base_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("knowledge_bases.id", ondelete="SET NULL"), nullable=True

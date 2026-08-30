@@ -10,7 +10,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.models.call import Call, CallStatus
-from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus, CampaignStatus
+from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus
 from app.models.user import User
 from app.services.campaign_service import CampaignService
 
@@ -32,9 +32,7 @@ async def _make_campaign(client: AsyncClient, headers: dict, agent: dict, **over
 async def test_campaign_lifecycle(
     client: AsyncClient, auth_headers: dict, agent: dict, lead: dict
 ) -> None:
-    campaign = await _make_campaign(
-        client, auth_headers, agent, lead_ids=[lead["id"]]
-    )
+    campaign = await _make_campaign(client, auth_headers, agent, lead_ids=[lead["id"]])
     assert campaign["status"] == "draft"
     assert campaign["stats"]["total_leads"] == 1
 
@@ -96,17 +94,21 @@ async def test_dispatch_respects_the_concurrency_limit(
     assert second.json()["reason"] == "at_concurrency_limit"
 
     calls = (
-        await db_session.execute(select(Call).where(Call.campaign_id == uuid.UUID(campaign["id"])))
-    ).scalars().all()
+        (
+            await db_session.execute(
+                select(Call).where(Call.campaign_id == uuid.UUID(campaign["id"]))
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert len(calls) == 2
 
 
 async def test_dispatch_refuses_outside_calling_hours(
     client: AsyncClient, auth_headers: dict, agent: dict, lead: dict, db_session
 ) -> None:
-    campaign = await _make_campaign(
-        client, auth_headers, agent, lead_ids=[lead["id"]]
-    )
+    campaign = await _make_campaign(client, auth_headers, agent, lead_ids=[lead["id"]])
     await client.post(f"/campaigns/{campaign['id']}/start", headers=auth_headers)
 
     record = await db_session.get(Campaign, uuid.UUID(campaign["id"]))
@@ -126,13 +128,11 @@ async def test_dispatch_refuses_outside_calling_hours(
     [
         (time(10, 0), time(19, 0), 12, True),
         (time(10, 0), time(19, 0), 22, False),
-        (time(22, 0), time(6, 0), 23, True),   # window wrapping midnight
+        (time(22, 0), time(6, 0), 23, True),  # window wrapping midnight
         (time(22, 0), time(6, 0), 12, False),
     ],
 )
-def test_calling_window_arithmetic(
-    start: time, end: time, now_hour: int, expected: bool
-) -> None:
+def test_calling_window_arithmetic(start: time, end: time, now_hour: int, expected: bool) -> None:
     campaign = Campaign(
         name="x",
         agent_id=uuid.uuid4(),
@@ -153,14 +153,20 @@ async def test_a_no_answer_is_retried_until_the_cap(
     )
     campaign_id = uuid.UUID(campaign["id"])
     user = (
-        await db_session.execute(select(User).where(User.email == "owner@example.com"))
-    ).unique().scalar_one()
+        (await db_session.execute(select(User).where(User.email == "owner@example.com")))
+        .unique()
+        .scalar_one()
+    )
 
     membership = (
-        await db_session.execute(
-            select(CampaignLead).where(CampaignLead.campaign_id == campaign_id)
+        (
+            await db_session.execute(
+                select(CampaignLead).where(CampaignLead.campaign_id == campaign_id)
+            )
         )
-    ).scalars().one()
+        .scalars()
+        .one()
+    )
 
     service = CampaignService(db_session)
     call = Call(
@@ -193,8 +199,10 @@ async def test_a_completed_call_closes_the_membership(
     campaign = await _make_campaign(client, auth_headers, agent, lead_ids=[lead["id"]])
     campaign_id = uuid.UUID(campaign["id"])
     user = (
-        await db_session.execute(select(User).where(User.email == "owner@example.com"))
-    ).unique().scalar_one()
+        (await db_session.execute(select(User).where(User.email == "owner@example.com")))
+        .unique()
+        .scalar_one()
+    )
 
     call = Call(
         organization_id=user.organization_id,
@@ -208,10 +216,14 @@ async def test_a_completed_call_closes_the_membership(
 
     await CampaignService(db_session).on_call_finished(call)
     membership = (
-        await db_session.execute(
-            select(CampaignLead).where(CampaignLead.campaign_id == campaign_id)
+        (
+            await db_session.execute(
+                select(CampaignLead).where(CampaignLead.campaign_id == campaign_id)
+            )
         )
-    ).scalars().one()
+        .scalars()
+        .one()
+    )
     assert membership.status is CampaignLeadStatus.COMPLETED
 
 
@@ -225,3 +237,36 @@ async def test_campaign_status_transitions_are_reflected_in_stats(
     assert stats["pending"] == 1
     assert stats["active_calls"] == 0
     assert stats["within_calling_hours"] is True
+
+
+async def test_inbound_call_is_accepted_and_matched_to_a_lead(
+    db_session, agent: dict, lead: dict
+) -> None:
+    """Someone dialling in gets a call record joined to their lead history."""
+    from app.models.call import CallDirection, CallStatus
+    from app.services.call_service import CallService
+
+    call = await CallService(db_session).accept_inbound(
+        provider="telnyx",
+        provider_call_id="cc-inbound-1",
+        from_number=lead["phone_number"],
+        to_number="+13195368347",
+    )
+    assert call is not None
+    assert call.direction is CallDirection.INBOUND
+    assert call.status is CallStatus.RINGING
+    assert str(call.lead_id) == lead["id"]
+    assert str(call.agent_id) == agent["id"]
+
+
+async def test_inbound_from_an_unknown_number_still_gets_answered(db_session, agent: dict) -> None:
+    from app.services.call_service import CallService
+
+    call = await CallService(db_session).accept_inbound(
+        provider="telnyx",
+        provider_call_id="cc-inbound-2",
+        from_number="+15550009999",
+        to_number="+13195368347",
+    )
+    assert call is not None
+    assert call.lead_id is None

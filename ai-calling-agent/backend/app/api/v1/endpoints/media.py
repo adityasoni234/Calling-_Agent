@@ -27,6 +27,7 @@ from app.services.campaign_service import CampaignService
 from app.services.cost_service import CostService
 from app.services.knowledge.retriever import Retriever
 from app.services.registry import get_llm, get_stt, get_telephony, get_tts
+from app.services.telephony.region import region_of
 from app.tasks.queue import enqueue_post_call
 
 router = APIRouter(tags=["media"])
@@ -179,7 +180,11 @@ async def _persist(call_id: uuid.UUID, result: ConversationResult) -> None:
 
         records = list(result.usage.records)
         if call.duration_seconds > 0:
-            records.append(get_telephony(call.provider).usage_for_call(call.duration_seconds))
+            records.append(
+                get_telephony(call.provider).usage_for_call(
+                    call.duration_seconds, region=region_of(call.to_number)
+                )
+            )
         await CostService(db).record_usage(call=call, records=records, commit=False)
         await db.commit()
 

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 
+import httpx
 from fastapi import APIRouter, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.pagination import PageParam, PageSizeParam, paginate
+from app.core.config import settings
 from app.core.errors import AppError, NotFoundError
 from app.models.call import Call, CallStatus, CallTurn, CallUsage
 from app.schemas.call import CallCreate, CallDetail, CallRead, CallTurnRead, CallUsageRead
@@ -96,6 +100,43 @@ async def transfer_call(
         raise AppError("Only a live call can be transferred", code="not_in_progress")
     await CallService(db).transfer(call, to)
     return MessageResponse(message=f"Transferring to {to}")
+
+
+@router.get("/{call_id}/recording", summary="Stream the call recording")
+async def recording(call_id: uuid.UUID, db: DbSession, user: CurrentUser) -> StreamingResponse:
+    """Proxy the carrier's recording.
+
+    Carrier recording URLs need account credentials, which must never reach the
+    browser -- so the audio streams through the API rather than handing out a
+    link the dashboard could not play anyway.
+    """
+    call = await _get(db, user, call_id)
+    if not call.recording_url:
+        raise NotFoundError("No recording for this call", code="no_recording")
+
+    auth: tuple[str, str] | None = None
+    if call.provider == "twilio":
+        auth = (settings.twilio_account_sid, settings.twilio_auth_token)
+    elif call.provider == "plivo":
+        auth = (settings.plivo_auth_id, settings.plivo_auth_token)
+
+    url = call.recording_url
+    if call.provider == "twilio" and not url.endswith(".mp3"):
+        url = f"{url}.mp3"
+
+    async def stream() -> AsyncIterator[bytes]:
+        async with httpx.AsyncClient(auth=auth, timeout=60, follow_redirects=True) as client:
+            async with client.stream("GET", url) as response:
+                if response.status_code >= 400:
+                    return
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+
+    return StreamingResponse(
+        stream(),
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": f'inline; filename="call-{call_id}.mp3"'},
+    )
 
 
 @router.post(

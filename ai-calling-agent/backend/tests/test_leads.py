@@ -50,8 +50,8 @@ async def test_csv_import_deduplicates_and_reports_errors(
     assert response.status_code == 200
 
     body = response.json()
-    assert body["imported"] == 2          # two valid, unique rows
-    assert body["skipped"] == 2           # one missing phone, one duplicate
+    assert body["imported"] == 2  # two valid, unique rows
+    assert body["skipped"] == 2  # one missing phone, one duplicate
     assert any("Row 4" in error for error in body["errors"])
 
     listing = await client.get("/leads", headers=auth_headers)

@@ -20,6 +20,7 @@ from app.core.logging import get_logger
 from app.models.call import Call, CallStatus
 from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus, CampaignStatus
 from app.models.lead import Lead, LeadStatus
+from app.models.organization import Organization
 from app.services.call_service import CallService
 from app.services.cost_service import CostService
 
@@ -140,11 +141,17 @@ class CampaignService:
                 await self.set_status(campaign, CampaignStatus.PAUSED)
                 return {"started": 0, "reason": "campaign_budget_reached"}
 
+        # An organization-level cap wins; otherwise the deployment-wide one.
+        organization = await self.db.get(Organization, campaign.organization_id)
+        global_cap = (
+            organization.max_concurrent_calls
+            if organization and organization.max_concurrent_calls
+            else settings.max_global_concurrent_calls
+        )
         in_flight = await self.active_call_count(campaign.id)
         slots = min(
             campaign.max_concurrent_calls - in_flight,
-            settings.max_global_concurrent_calls
-            - await self.global_active_calls(campaign.organization_id),
+            global_cap - await self.global_active_calls(campaign.organization_id),
         )
         if slots <= 0:
             return {"started": 0, "reason": "at_concurrency_limit"}

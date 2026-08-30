@@ -47,10 +47,25 @@ class TelephonyProvider(ABC):
     # which Deepgram and Cartesia accept directly -- so no transcoding.
     sample_rate: int = 8000
     encoding: str = "mulaw"
+    # True: the carrier fetches an XML document that answers the call and opens
+    # the stream (Plivo, Twilio). False: the carrier is driven by commands and
+    # expects only an acknowledgement (Telnyx Call Control).
+    answers_with_document: bool = True
+    # True when the vendor runs the conversation itself, so no media socket is
+    # opened and our conversation manager, barge-in and prompt do not apply.
+    # The platform still owns leads, campaigns, scoring and cost.
+    runs_own_conversation: bool = False
 
     @abstractmethod
     async def originate(
-        self, *, to_number: str, from_number: str, answer_url: str, status_url: str, call_id: str
+        self,
+        *,
+        to_number: str,
+        from_number: str,
+        answer_url: str,
+        status_url: str,
+        call_id: str,
+        record: bool = False,
     ) -> OriginateResult: ...
 
     @abstractmethod
@@ -65,6 +80,33 @@ class TelephonyProvider(ABC):
 
     @abstractmethod
     def parse_webhook(self, payload: dict[str, Any]) -> TelephonyEvent: ...
+
+    async def answer(self, provider_call_id: str) -> None:
+        """Pick up an inbound call.
+
+        Document-driven providers answer implicitly when they fetch the answer
+        document, so this is a no-op for them.
+        """
+        return None
+
+    def is_inbound(self, payload: dict[str, Any]) -> bool:
+        """True when this webhook is a new inbound call we have never seen."""
+        return False
+
+    def inbound_details(self, payload: dict[str, Any]) -> tuple[str, str, str]:
+        """Return `(provider_call_id, from_number, to_number)` for an inbound call."""
+        return "", "", ""
+
+    async def on_event(self, event: TelephonyEvent, *, websocket_url: str) -> None:
+        """React to a webhook by issuing provider commands.
+
+        XML-driven providers (Plivo, Twilio) answer the call and open the media
+        stream from the document returned by `answer_document()`, so they need
+        nothing here. Command-driven providers (Telnyx Call Control) have no
+        answer document at all -- they are told what to do event by event, which
+        is what this hook is for. Default is a no-op.
+        """
+        return None
 
     # --- media frames --------------------------------------------------
 
@@ -88,5 +130,5 @@ class TelephonyProvider(ABC):
             provider=self.name,
             unit="minute",
             quantity=round(duration_seconds / 60, 4),
-            model=region,
+            region=region,
         )

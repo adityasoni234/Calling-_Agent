@@ -12,12 +12,28 @@ import argparse
 import asyncio
 import sys
 
+from pydantic import ValidationError
+
 from app.core.errors import ConflictError
 from app.db.session import SessionLocal
+from app.schemas.auth import RegisterRequest
 from app.services.auth_service import AuthService
 
 
 async def seed(email: str, password: str, full_name: str, organization: str) -> int:
+    # Validate through the same schema the API uses. Without this the CLI could
+    # create an account with a password the API itself would reject -- and this
+    # account is reachable from the internet as soon as a tunnel is running.
+    try:
+        RegisterRequest(
+            email=email, password=password, full_name=full_name, organization_name=organization
+        )
+    except ValidationError as exc:
+        for error in exc.errors():
+            field = ".".join(str(part) for part in error["loc"])
+            print(f"Invalid {field}: {error['msg']}", file=sys.stderr)
+        return 2
+
     async with SessionLocal() as session:
         service = AuthService(session)
         if await service.get_user_by_email(email):

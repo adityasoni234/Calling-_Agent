@@ -41,7 +41,7 @@ class CartesiaTTSProvider(TTSProvider):
             raise ProviderError(self.name, "no voice_id configured for this agent")
 
         body = {
-            "model_id": voice_config.get("model") or settings.tts_model or "sonic-2",
+            "model_id": voice_config.get("model") or settings.tts_model or "sonic-3",
             "transcript": text,
             "voice": {"mode": "id", "id": voice_id},
             "language": voice_config.get("language", "en"),

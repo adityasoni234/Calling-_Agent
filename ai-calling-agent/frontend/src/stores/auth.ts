@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 import { api, configureApi } from '@/lib/api'
-import type { AuthResponse, TokenPair, User } from '@/types/api'
+import type { AuthResponse, AuthUser, TokenPair } from '@/types/api'
 
 /**
  * Tokens live in localStorage so a refresh doesn't log the user out. That trades
@@ -11,13 +11,13 @@ import type { AuthResponse, TokenPair, User } from '@/types/api'
  * scripts on this origin. Move to httpOnly cookies if the threat model tightens.
  */
 interface AuthState {
-  user: User | null
+  user: AuthUser | null
   tokens: TokenPair | null
   hydrated: boolean
   setHydrated: () => void
   setSession: (session: AuthResponse) => void
   setTokens: (tokens: TokenPair) => void
-  setUser: (user: User) => void
+  setUser: (user: AuthUser) => void
   clear: () => void
   login: (email: string, password: string) => Promise<void>
   register: (input: {

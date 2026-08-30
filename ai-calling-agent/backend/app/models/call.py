@@ -123,6 +123,7 @@ class CallUsage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     provider: Mapped[str] = mapped_column(String(48))
     model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     unit: Mapped[str] = mapped_column(String(32))  # minute | character | token_in | token_out
+    region: Mapped[str | None] = mapped_column(String(16), nullable=True)
     quantity: Mapped[float] = mapped_column(Float, default=0.0)
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     priced: Mapped[bool] = mapped_column(Boolean, default=False)

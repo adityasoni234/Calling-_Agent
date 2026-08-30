@@ -50,6 +50,8 @@ class AgentBase(BaseModel):
     silence_prompt_ms: int = Field(default=6000, ge=1500, le=30000)
     silence_hangup_ms: int = Field(default=12000, ge=3000, le=60000)
     interruptible: bool = True
+    ask_language_preference: bool = True
+    record_calls: bool = True
     knowledge_base_id: uuid.UUID | None = None
     is_active: bool = True
 
@@ -82,6 +84,8 @@ class AgentUpdate(BaseModel):
     silence_prompt_ms: int | None = Field(default=None, ge=1500, le=30000)
     silence_hangup_ms: int | None = Field(default=None, ge=3000, le=60000)
     interruptible: bool | None = None
+    ask_language_preference: bool | None = None
+    record_calls: bool | None = None
     knowledge_base_id: uuid.UUID | None = None
     is_active: bool | None = None
 
@@ -112,6 +116,8 @@ class AgentRead(BaseModel):
     silence_prompt_ms: int
     silence_hangup_ms: int
     interruptible: bool
+    ask_language_preference: bool
+    record_calls: bool
     knowledge_base_id: uuid.UUID | None
     is_active: bool
     created_at: datetime
@@ -121,3 +127,22 @@ class PromptPreview(BaseModel):
     system_prompt: str
     greeting: str
     estimated_tokens: int
+
+
+class AgentGenerateRequest(BaseModel):
+    """A few lines describing what the agent should do."""
+
+    brief: str = Field(
+        min_length=20,
+        max_length=2000,
+        description="Plain language: who you are, who you're calling, what a good call achieves.",
+    )
+    company_name: str = Field(default="", max_length=200)
+    language: AgentLanguage = AgentLanguage.AUTO
+
+
+class AgentGenerateResponse(BaseModel):
+    """A draft for review. Nothing is saved until the user says so."""
+
+    draft: AgentCreate
+    notes: str

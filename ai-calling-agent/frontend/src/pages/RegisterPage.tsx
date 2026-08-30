@@ -93,7 +93,7 @@ export function RegisterPage() {
         </Button>
       </form>
 
-      <p className="mt-5 text-center text-sm text-slate-500">
+      <p className="mt-5 text-center text-sm text-ink-500">
         Already have an account?{' '}
         <Link to="/login" className="font-medium text-brand-600 hover:text-brand-700">
           Sign in

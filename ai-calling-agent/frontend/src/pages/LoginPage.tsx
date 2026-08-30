@@ -64,7 +64,7 @@ export function LoginPage() {
         </Button>
       </form>
 
-      <p className="mt-5 text-center text-sm text-slate-500">
+      <p className="mt-5 text-center text-sm text-ink-500">
         No account yet?{' '}
         <Link to="/register" className="font-medium text-brand-600 hover:text-brand-700">
           Create your organization
@@ -84,16 +84,29 @@ export function AuthShell({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <span className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-brand-600 text-sm font-bold text-white">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-ink-deep px-4 py-10">
+      {/* Two soft brand washes give the dark ground depth without a busy image. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-40 -top-40 h-[32rem] w-[32rem] rounded-full bg-brand-600/20 blur-[120px]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-40 -right-32 h-[28rem] w-[28rem] rounded-full bg-brand-400/15 blur-[120px]"
+      />
+
+      <div className="relative w-full max-w-sm animate-fade-up">
+        <div className="mb-8 text-center">
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-sheen text-sm font-bold text-white shadow-glow">
             AC
           </span>
-          <h1 className="mt-4 text-xl font-semibold text-slate-900">{title}</h1>
-          <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+          <h1 className="mt-5 text-xl font-semibold text-white">{title}</h1>
+          <p className="mt-1.5 text-sm text-ink-400">{subtitle}</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">{children}</div>
+        <div className="rounded-2xl bg-white p-6 shadow-lift ring-1 ring-white/10">{children}</div>
+        <p className="mt-6 text-center text-2xs text-ink-500">
+          Calls are recorded where enabled. Comply with local calling regulations.
+        </p>
       </div>
     </div>
   )

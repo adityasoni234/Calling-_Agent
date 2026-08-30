@@ -11,6 +11,8 @@ Two rules shape this file:
 
 from __future__ import annotations
 
+import re
+
 from app.agents.state import STATE_GUIDANCE, ConversationState
 from app.models.agent import Agent, AgentLanguage
 
@@ -39,8 +41,24 @@ BASE_RULES = [
     "If the customer interrupts you, stop and address what they just said.",
     "Do not repeat yourself. Do not re-introduce yourself mid-call.",
     "Numbers, dates and prices should be written as words the way they are spoken.",
+    "Acknowledge what they said before moving on -- a short 'samajh gaya' or "
+    "'got it' -- so it sounds like listening rather than reading a script.",
+    "Never ask two things in one breath, and never repeat a question they have already answered.",
+    "If they sound busy or annoyed, offer to call back instead of pushing.",
     "When the call is finished, end your final line with the marker [END_CALL].",
 ]
+
+LANGUAGE_PREFERENCE_RULE = (
+    "On your very first reply after the greeting, ask which language they are "
+    "comfortable in -- Hindi, English, or a mix. Ask it naturally in one short "
+    "sentence, then speak only that way for the rest of the call. Do not ask "
+    "again."
+)
+
+RECORDING_NOTICE_RULE = (
+    "Mention once, in the first thirty seconds and in a single short clause, "
+    "that the call is recorded for quality. Do not dwell on it or apologise."
+)
 
 
 def _bullets(items: list[str]) -> str:
@@ -66,7 +84,12 @@ def build_system_prompt(agent: Agent) -> str:
         "## Language",
         LANGUAGE_RULES.get(agent.language, LANGUAGE_RULES[AgentLanguage.AUTO]),
     ]
-    parts += ["", "## How to talk", _bullets(BASE_RULES)]
+    rules = list(BASE_RULES)
+    if agent.ask_language_preference:
+        rules.insert(1, LANGUAGE_PREFERENCE_RULE)
+    if agent.record_calls:
+        rules.append(RECORDING_NOTICE_RULE)
+    parts += ["", "## How to talk", _bullets(rules)]
 
     if agent.forbidden_rules:
         parts += [
@@ -132,8 +155,18 @@ def build_turn_context(
 
 
 def build_greeting(agent: Agent, lead_name: str | None = None) -> str:
+    """Fill the greeting template.
+
+    Tolerates a template written without a space around `{name}` and a lead with
+    no name -- both otherwise produce audible glitches ("NamasteAditya", or a
+    stranded comma) that the customer hears in the first second of the call.
+    """
     if agent.greeting:
-        return agent.greeting.replace("{name}", lead_name or "").replace("  ", " ").strip()
+        name = (lead_name or "").strip()
+        text = agent.greeting.replace("{name}", f" {name} " if name else " ")
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"\s+([,.!?])", r"\1", text)
+        return text.strip()
     who = f" {lead_name}" if lead_name else ""
     company = agent.company_name or "our team"
     return f"Hello{who}, this is {agent.name} from {company}. How are you today?"

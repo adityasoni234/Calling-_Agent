@@ -12,8 +12,18 @@ from app.core.errors import ConflictError, NotFoundError
 from app.models.agent import Agent
 from app.models.call import Call
 from app.models.campaign import Campaign, CampaignStatus
-from app.schemas.agent import AgentCreate, AgentRead, AgentUpdate, PromptPreview
+from app.models.organization import Organization
+from app.schemas.agent import (
+    AgentCreate,
+    AgentGenerateRequest,
+    AgentGenerateResponse,
+    AgentRead,
+    AgentUpdate,
+    ObjectionPair,
+    PromptPreview,
+)
 from app.schemas.common import MessageResponse, Page
+from app.services.agent_builder import generate_blueprint
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -55,6 +65,43 @@ async def create_agent(payload: AgentCreate, db: DbSession, user: CurrentUser) -
     await db.commit()
     await db.refresh(agent)
     return AgentRead.model_validate(agent)
+
+
+@router.post(
+    "/generate",
+    response_model=AgentGenerateResponse,
+    summary="Draft an agent from a plain-language brief",
+)
+async def generate_agent(
+    payload: AgentGenerateRequest, db: DbSession, user: CurrentUser
+) -> AgentGenerateResponse:
+    """Write the configuration for you, then hand it back to edit.
+
+    Deliberately does not save: a persona nobody reviewed is how an agent ends
+    up promising things the business cannot deliver.
+    """
+    organization = await db.get(Organization, user.organization_id)
+    blueprint, _usage = await generate_blueprint(
+        brief=payload.brief,
+        company_name=payload.company_name or (organization.name if organization else ""),
+        language=payload.language,
+    )
+
+    draft = AgentCreate(
+        **blueprint.model_dump(exclude={"objection_handling"}),
+        company_name=payload.company_name or (organization.name if organization else ""),
+        objection_handling=[
+            ObjectionPair(objection=pair.objection, response=pair.response)
+            for pair in blueprint.objection_handling
+        ],
+    )
+    return AgentGenerateResponse(
+        draft=draft,
+        notes=(
+            "Review every line before saving, especially the forbidden rules — "
+            "they are what stop the agent over-promising on a live call."
+        ),
+    )
 
 
 @router.get("/{agent_id}", response_model=AgentRead, summary="Get one agent")

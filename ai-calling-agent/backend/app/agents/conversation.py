@@ -41,7 +41,11 @@ TRANSFER_MARKER = "[TRANSFER]"
 # still generating the rest. This is most of the perceived latency win.
 _SENTENCE = re.compile(r"(?<=[.!?।])\s+")
 # How long to wait for the customer to finish a sentence before replying.
-TURN_DEBOUNCE_SECONDS = 0.3
+# Measured against live Deepgram output: a single spoken sentence often
+# arrives as two or three finals, and 0.3s was too tight to reassemble them.
+# An explicit UtteranceEnd still dispatches immediately, so this only costs
+# latency when the provider gives us no endpointing signal.
+TURN_DEBOUNCE_SECONDS = 0.6
 
 
 class AudioSink(Protocol):

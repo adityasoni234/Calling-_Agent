@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import { SheetTabs } from '@/components/SheetTabs'
 import { Alert } from '@/components/ui/Alert'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -9,8 +10,16 @@ import { Field } from '@/components/ui/Field'
 import { Select, TextArea } from '@/components/ui/Inputs'
 import { Modal } from '@/components/ui/Modal'
 import { EmptyState, Pager, Table } from '@/components/ui/Table'
-import { useAgents, useCreateLead, useDeleteLead, useImportLeads, useLeads, usePlaceCall } from '@/hooks/api'
-import { ApiError } from '@/lib/api'
+import {
+  useAgents,
+  useCreateLead,
+  useDeleteLead,
+  useImportLeads,
+  useLeadLists,
+  useLeads,
+  usePlaceCall,
+} from '@/hooks/api'
+import { ApiError, NetworkError } from '@/lib/api'
 import { downloadCsv, leadTemplateCsv } from '@/lib/csv'
 import { formatDateTime } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
@@ -30,8 +39,16 @@ export function LeadsPage() {
   const [creating, setCreating] = useState(false)
   const [callFor, setCallFor] = useState<Lead | null>(null)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  // null means the "All leads" tab.
+  const [sheet, setSheet] = useState<string | null>(null)
 
-  const { data, isLoading } = useLeads({ page, search: search || undefined, status: status || undefined })
+  const { data: sheets } = useLeadLists()
+  const { data, isLoading } = useLeads({
+    page,
+    search: search || undefined,
+    status: status || undefined,
+    list_id: sheet ?? undefined,
+  })
   const remove = useDeleteLead()
   const token = useAuthStore((state) => state.tokens?.access_token ?? null)
   const importLeads = useImportLeads(token)
@@ -54,9 +71,17 @@ export function LeadsPage() {
               const file = event.target.files?.[0]
               if (!file) return
               try {
-                setImportResult(await importLeads.mutateAsync(file))
+                const outcome = await importLeads.mutateAsync(file)
+                setImportResult(outcome)
+                // Land on the sheet that was just created rather than making
+                // the user hunt for it among the tabs.
+                if (outcome.lead_list) {
+                  setSheet(outcome.lead_list.id)
+                  setPage(1)
+                }
               } catch (error) {
                 setImportResult({
+                  lead_list: null,
                   imported: 0,
                   skipped: 0,
                   errors: [error instanceof Error ? error.message : 'Import failed'],
@@ -112,8 +137,17 @@ export function LeadsPage() {
         </Alert>
       )}
 
-      <Card>
-        <div className="mb-4 flex flex-wrap gap-3">
+      <Card flush>
+        <SheetTabs
+          sheets={sheets ?? []}
+          active={sheet}
+          total={sheets ? undefined : data?.total}
+          onSelect={(id) => {
+            setSheet(id)
+            setPage(1)
+          }}
+        />
+        <div className="mb-4 flex flex-wrap gap-3 px-5 pt-4">
           <input
             value={search}
             onChange={(event) => {
@@ -140,15 +174,24 @@ export function LeadsPage() {
           </select>
         </div>
 
+        <div className="px-5 pb-4">
         {isLoading ? (
           <p className="py-8 text-center text-sm text-ink-500">Loading…</p>
         ) : !data?.items.length ? (
           <EmptyState
-            title={search || status ? 'No leads match that filter' : 'No leads yet'}
+            title={
+              search || status
+                ? 'No leads match that filter'
+                : sheet
+                  ? 'This sheet is empty'
+                  : 'No leads yet'
+            }
             hint={
               search || status
                 ? 'Try a different search, or clear the status filter.'
-                : 'Import a CSV exported from your CRM — name and phone are the only required columns — or add one by hand to try a call.'
+                : sheet
+                  ? 'Every lead that was on this sheet has since been deleted.'
+                  : 'Import a CSV exported from your CRM — name and phone are the only required columns — or add one by hand to try a call.'
             }
           />
         ) : (
@@ -186,6 +229,7 @@ export function LeadsPage() {
             <Pager page={data.page} pages={data.pages} total={data.total} onChange={setPage} />
           </>
         )}
+        </div>
       </Card>
 
       {creating && <LeadEditor onClose={() => setCreating(false)} />}
@@ -217,7 +261,7 @@ function LeadEditor({ onClose }: { onClose: () => void }) {
       })
       onClose()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not create the lead')
+      setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Could not create the lead')
     }
   }
 
@@ -244,7 +288,7 @@ function LeadEditor({ onClose }: { onClose: () => void }) {
   )
 }
 
-function CallDialog({ lead, onClose }: { lead: Lead; onClose: () => void }) {
+export function CallDialog({ lead, onClose }: { lead: Lead; onClose: () => void }) {
   const { data: agents } = useAgents()
   const active = agents?.items.filter((agent) => agent.is_active) ?? []
   // With one agent, asking which to use is a dialog that answers itself.
@@ -259,7 +303,7 @@ function CallDialog({ lead, onClose }: { lead: Lead; onClose: () => void }) {
       await place.mutateAsync({ agent_id: resolved, lead_id: lead.id })
       onClose()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not place the call')
+      setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Could not place the call')
     }
   }
 

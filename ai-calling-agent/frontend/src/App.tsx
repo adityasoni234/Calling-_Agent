@@ -12,6 +12,7 @@ import { KnowledgePage } from '@/pages/KnowledgePage'
 import { LeadsPage } from '@/pages/LeadsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { QualifiedPage } from '@/pages/QualifiedPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
@@ -33,6 +34,7 @@ export default function App() {
             <Route index element={<DashboardPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/leads" element={<LeadsPage />} />
+            <Route path="/qualified" element={<QualifiedPage />} />
             <Route path="/campaigns" element={<CampaignsPage />} />
             <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
             <Route path="/calls" element={<CallsPage />} />

@@ -93,6 +93,12 @@ class Settings(BaseSettings):
     inbound_agent_id: str = ""
     # How long to let the destination ring before giving up.
     ring_timeout_seconds: int = 60
+    #: A call whose provider never sent a terminal webhook is written off after
+    #: this long. Without it such calls count as "active" forever and silently
+    #: consume the concurrency cap, which stops the dialler dead.
+    stale_call_timeout_minutes: int = 30
+    #: Largest lead CSV accepted by any upload endpoint.
+    max_csv_bytes: int = 10 * 1024 * 1024
 
     # --- model providers -----------------------------------------------
     anthropic_api_key: str = ""
@@ -113,6 +119,14 @@ class Settings(BaseSettings):
 
     stt_model: str = "nova-2"
     stt_language: str = "multi"
+    # How long a pause must be before the transcript is finalised. Higher means
+    # fewer fragments and fewer interruptions, at the cost of a little latency.
+    #: Fallback wait before replying to a FINAL that is not end-of-speech.
+    #: Only reached when the provider has not endpointed yet, so lowering it
+    #: trades dead air against answering a half-finished sentence.
+    turn_debounce_seconds: float = 0.6
+    stt_endpointing_ms: int = 300
+    stt_utterance_end_ms: int = 1000
     tts_voice_id: str = ""
     tts_model: str = ""
 
@@ -121,6 +135,21 @@ class Settings(BaseSettings):
     audio_sample_rate: int = 8000
     audio_encoding: str = "mulaw"
     barge_in_enabled: bool = True
+    # Barge-in tuning. The default was to cancel on the provider's VAD event
+    # alone, which fires on a cough, room noise, or the agent's own echo -- so
+    # the agent stopped talking constantly. These require evidence of actual
+    # speech before interrupting.
+    #
+    # Words in a partial transcript before we accept it as a real interruption.
+    barge_in_min_words: int = 2
+    # Ignore interruptions in the first moments of an utterance: this is when
+    # echo of the agent's own voice is most likely to come back.
+    barge_in_grace_ms: int = 500
+    # Inbound audio quieter than this is treated as room noise, not speech.
+    barge_in_min_dbfs: float = -45.0
+    # If an interruption produces no transcript within this window, the customer
+    # did not actually speak -- resume rather than leaving dead air.
+    barge_in_recover_ms: int = 1500
     # Rolling-summary threshold: turns older than this are compressed instead of
     # resent verbatim, which is what keeps token cost linear in call length.
     context_max_turns: int = 12

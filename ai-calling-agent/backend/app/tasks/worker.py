@@ -67,9 +67,30 @@ async def tick_campaigns(_ctx: dict[str, Any]) -> None:
                 log.info("campaign.dispatch", campaign_id=str(campaign_id), **result)
 
 
+async def reap_stale_calls(_ctx: dict[str, Any]) -> None:
+    """Sweep every organization, not just ones with a running campaign.
+
+    Manual calls count towards the concurrency cap too, so ghosts have to be
+    cleared even when nothing is dialling.
+    """
+    from sqlalchemy import select
+
+    from app.models.organization import Organization
+
+    async with SessionLocal() as db:
+        organization_ids = list((await db.execute(select(Organization.id))).scalars())
+
+    for organization_id in organization_ids:
+        async with SessionLocal() as db:
+            await CampaignService(db).reap_stale_calls(organization_id)
+
+
 class WorkerSettings:
     functions = [run_post_call, run_ingest, run_campaign_dispatch]
-    cron_jobs = [cron(tick_campaigns, second={0, 15, 30, 45}, run_at_startup=True)]
+    cron_jobs = [
+        cron(tick_campaigns, second={0, 15, 30, 45}, run_at_startup=True),
+        cron(reap_stale_calls, minute=set(range(0, 60, 5)), run_at_startup=True),
+    ]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = 20
     job_timeout = 300

@@ -20,7 +20,7 @@ import {
   usePlaceCall,
   useSaveAgent,
 } from '@/hooks/api'
-import { ApiError } from '@/lib/api'
+import { ApiError, NetworkError } from '@/lib/api'
 import type { Agent } from '@/types/api'
 
 const BLANK: Partial<Agent> = {
@@ -163,7 +163,7 @@ function AgentEditor({
       setForm((current) => ({ ...current, ...result.draft }))
       setGenerated(result.notes)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not draft the agent')
+      setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Could not draft the agent')
     }
   }
 
@@ -181,7 +181,7 @@ function AgentEditor({
       await save.mutateAsync(body)
       onClose()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save the agent')
+      setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Could not save the agent')
     }
   }
 
@@ -470,7 +470,7 @@ function TestCallDialog({ agent, onClose }: { agent: Agent; onClose: () => void 
       await place.mutateAsync({ agent_id: agent.id, to_number: number })
       setPlaced(true)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not place the call')
+      setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Could not place the call')
     }
   }
 

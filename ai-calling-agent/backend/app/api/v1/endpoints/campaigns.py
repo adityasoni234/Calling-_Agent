@@ -2,19 +2,22 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, File, Query, UploadFile, status
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.pagination import PageParam, PageSizeParam, paginate
-from app.core.errors import NotFoundError
+from app.core.config import settings
+from app.core.errors import NotFoundError, ValidationFailedError
 from app.models.agent import Agent
 from app.models.call import Call
 from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus, CampaignStatus
+from app.models.lead import Lead, LeadStatus
 from app.schemas.campaign import (
     AddLeadsRequest,
     CampaignCreate,
     CampaignDetail,
+    CampaignImportResult,
     CampaignLeadRead,
     CampaignRead,
     CampaignStats,
@@ -23,6 +26,7 @@ from app.schemas.campaign import (
 )
 from app.schemas.common import MessageResponse, Page
 from app.services.campaign_service import ACTIVE_CALL_STATUSES, CampaignService
+from app.services.lead_service import LeadService
 from app.tasks.queue import enqueue_campaign_dispatch
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
@@ -186,14 +190,85 @@ async def stop_campaign(campaign_id: uuid.UUID, db: DbSession, user: CurrentUser
 
 
 @router.post(
+    "/{campaign_id}/leads/import",
+    response_model=CampaignImportResult,
+    summary="Upload a CSV of people to call on this campaign",
+)
+async def import_campaign_leads(
+    campaign_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+    file: UploadFile = File(...),
+) -> CampaignImportResult:
+    """Import a CSV and put everyone in it on this campaign in one step.
+
+    Numbers already in the address book are attached rather than skipped -- a
+    duplicate row still means "call this person", and making the user import
+    first and then hunt for the same people in a picker is busywork.
+    """
+    if not (file.filename or "").lower().endswith(".csv"):
+        raise ValidationFailedError("Upload a .csv file", code="invalid_file_type")
+
+    content = await file.read()
+    if len(content) > settings.max_csv_bytes:
+        raise ValidationFailedError("CSV is larger than 10 MB", code="file_too_large")
+
+    service = CampaignService(db)
+    campaign = await service.get(campaign_id, user.organization_id)
+
+    # A campaign upload is still a sheet, and should appear as its own tab
+    # on the Leads page like any other.
+    filename = (file.filename or "Imported list").rsplit("/", 1)[-1]
+    result = await LeadService(db).import_csv(
+        user.organization_id,
+        content,
+        list_name=filename.removesuffix(".csv").removesuffix(".CSV") or filename,
+        source_filename=filename,
+    )
+    phones = result["phone_numbers"]
+
+    attached = 0
+    if phones:
+        rows = await db.execute(
+            select(Lead.id).where(
+                Lead.organization_id == user.organization_id,
+                Lead.phone_number.in_(phones),
+                # Never dial someone who has asked not to be called, whatever
+                # the spreadsheet says.
+                Lead.status != LeadStatus.DO_NOT_CALL,
+            )
+        )
+        attached = await service.add_leads(campaign, list(rows.scalars()))
+
+    return CampaignImportResult(
+        imported=result["imported"],
+        skipped=result["skipped"],
+        attached=attached,
+        errors=result["errors"],
+    )
+
+
+@router.post(
     "/{campaign_id}/dispatch", response_model=DispatchResult, summary="Run one dispatch tick"
 )
-async def dispatch_now(campaign_id: uuid.UUID, db: DbSession, user: CurrentUser) -> DispatchResult:
-    """Manual tick. The worker does this on a schedule; this is for testing
-    a campaign without waiting for the cron."""
+async def dispatch_now(
+    campaign_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+    force: bool = Query(
+        default=False,
+        description="Dial immediately, ignoring the calling window and retry backoff. "
+        "Budget and concurrency caps still apply.",
+    ),
+) -> DispatchResult:
+    """Manual tick. The worker does this on a schedule; this runs one now.
+
+    A person pressing "Dial now" expects a call this second, so ``force`` lets
+    the request past the calling window they configured for the cron.
+    """
     service = CampaignService(db)
     await service.get(campaign_id, user.organization_id)
-    result = await service.dispatch(campaign_id)
+    result = await service.dispatch(campaign_id, force=force)
     return DispatchResult(
         started=int(result.get("started", 0)), reason=str(result.get("reason", ""))
     )

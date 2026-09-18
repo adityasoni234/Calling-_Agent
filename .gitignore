@@ -32,3 +32,15 @@ firebase-debug.log
 # Runtime
 uploads/
 *.log
+
+# Real lead data — never commit. These hold live phone numbers and email
+# addresses of real people, and this repository is public.
+*.csv
+*.numbers
+!**/leads-template.csv
+!**/*.example.csv
+
+# Built frontend env: bakes an ephemeral tunnel/backend URL, machine-local.
+.env.production
+**/.env.production
+!**/.env.production.example

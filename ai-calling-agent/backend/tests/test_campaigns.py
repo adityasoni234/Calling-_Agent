@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -13,6 +13,7 @@ from app.models.call import Call, CallStatus
 from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus
 from app.models.user import User
 from app.services.campaign_service import CampaignService
+from tests.conftest import REGISTRATION
 
 
 async def _make_campaign(client: AsyncClient, headers: dict, agent: dict, **overrides) -> dict:
@@ -270,3 +271,200 @@ async def test_inbound_from_an_unknown_number_still_gets_answered(db_session, ag
     )
     assert call is not None
     assert call.lead_id is None
+
+
+async def test_dial_now_calls_outside_the_configured_window(
+    client: AsyncClient, auth_headers: dict, agent: dict, lead: dict, db_session
+) -> None:
+    """The window governs the cron. A person pressing Dial now wants a call now."""
+    campaign = await _make_campaign(client, auth_headers, agent, lead_ids=[lead["id"]])
+    await client.post(f"/campaigns/{campaign['id']}/start", headers=auth_headers)
+
+    record = await db_session.get(Campaign, uuid.UUID(campaign["id"]))
+    record.timezone = "Asia/Kolkata"
+    record.calling_hours_start = time(3, 0)
+    record.calling_hours_end = time(3, 1)
+    await db_session.commit()
+
+    blocked = await client.post(f"/campaigns/{campaign['id']}/dispatch", headers=auth_headers)
+    assert blocked.json()["reason"] == "outside_calling_hours"
+    assert blocked.json()["started"] == 0
+
+    forced = await client.post(
+        f"/campaigns/{campaign['id']}/dispatch?force=true", headers=auth_headers
+    )
+    assert forced.json()["started"] == 1, forced.text
+
+
+async def test_dial_now_ignores_the_retry_backoff(
+    client: AsyncClient, auth_headers: dict, agent: dict, lead: dict, db_session
+) -> None:
+    """A lead parked behind a 3-hour retry delay should still dial on demand."""
+    campaign = await _make_campaign(client, auth_headers, agent, lead_ids=[lead["id"]])
+    await client.post(f"/campaigns/{campaign['id']}/start", headers=auth_headers)
+
+    membership = (
+        await db_session.execute(
+            select(CampaignLead).where(CampaignLead.campaign_id == uuid.UUID(campaign["id"]))
+        )
+    ).scalar_one()
+    membership.next_attempt_at = datetime.now(UTC) + timedelta(hours=3)
+    await db_session.commit()
+
+    waiting = await client.post(f"/campaigns/{campaign['id']}/dispatch", headers=auth_headers)
+    assert waiting.json()["started"] == 0
+
+    forced = await client.post(
+        f"/campaigns/{campaign['id']}/dispatch?force=true", headers=auth_headers
+    )
+    assert forced.json()["started"] == 1, forced.text
+
+
+async def test_calls_the_provider_never_finished_stop_blocking_the_dialler(
+    client: AsyncClient, auth_headers: dict, agent: dict, lead: dict, db_session
+) -> None:
+    """A dropped status webhook used to wedge the dialler permanently.
+
+    The call sat in `ringing` forever, counted towards the concurrency cap, and
+    every dispatch returned at_concurrency_limit while the UI correctly showed
+    nothing live. Eleven of these had accumulated on the live deployment.
+    """
+    campaign = await _make_campaign(client, auth_headers, agent, lead_ids=[lead["id"]])
+    await client.post(f"/campaigns/{campaign['id']}/start", headers=auth_headers)
+
+    record = await db_session.get(Campaign, uuid.UUID(campaign["id"]))
+    user = (
+        await db_session.execute(select(User).where(User.email == REGISTRATION["email"]))
+    ).scalar_one()
+
+    # Fill the cap with calls the provider never reported a terminal status for.
+    for _ in range(record.max_concurrent_calls):
+        db_session.add(
+            Call(
+                organization_id=user.organization_id,
+                agent_id=uuid.UUID(agent["id"]),
+                campaign_id=record.id,
+                direction="outbound",
+                provider="mock",
+                from_number="+10000000000",
+                to_number="+919876543210",
+                status=CallStatus.RINGING,
+                created_at=datetime.now(UTC) - timedelta(hours=4),
+            )
+        )
+    await db_session.commit()
+
+    blocked = await CampaignService(db_session).active_call_count(record.id)
+    assert blocked == record.max_concurrent_calls
+
+    reaped = await CampaignService(db_session).reap_stale_calls(user.organization_id)
+    assert reaped == record.max_concurrent_calls
+    assert await CampaignService(db_session).active_call_count(record.id) == 0
+
+    forced = await client.post(
+        f"/campaigns/{campaign['id']}/dispatch?force=true", headers=auth_headers
+    )
+    assert forced.json()["started"] == 1, forced.text
+
+
+async def test_a_live_call_is_not_reaped(
+    client: AsyncClient, auth_headers: dict, agent: dict, lead: dict, db_session
+) -> None:
+    """The reaper must never hang up on a call that is genuinely in progress."""
+    campaign = await _make_campaign(client, auth_headers, agent, lead_ids=[lead["id"]])
+    user = (
+        await db_session.execute(select(User).where(User.email == REGISTRATION["email"]))
+    ).scalar_one()
+    db_session.add(
+        Call(
+            organization_id=user.organization_id,
+            agent_id=uuid.UUID(agent["id"]),
+            campaign_id=uuid.UUID(campaign["id"]),
+            direction="outbound",
+            provider="mock",
+            from_number="+10000000000",
+            to_number="+919876543210",
+            status=CallStatus.IN_PROGRESS,
+        )
+    )
+    await db_session.commit()
+
+    assert await CampaignService(db_session).reap_stale_calls(user.organization_id) == 0
+
+
+async def test_uploading_a_csv_puts_everyone_in_it_on_the_campaign(
+    client: AsyncClient, auth_headers: dict, agent: dict
+) -> None:
+    """The point is one step: upload a list, and those people get called."""
+    campaign = await _make_campaign(client, auth_headers, agent)
+    csv = (
+        b"name,phone,email\n"
+        b"Suresh Kumar,9876500001,suresh@example.com\n"
+        b"Neha Gupta,9876500002,neha@example.com\n"
+    )
+
+    response = await client.post(
+        f"/campaigns/{campaign['id']}/leads/import",
+        files={"file": ("leads.csv", csv, "text/csv")},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["imported"] == 2
+    assert body["attached"] == 2
+
+    listed = await client.get(f"/campaigns/{campaign['id']}/leads", headers=auth_headers)
+    assert listed.json()["total"] == 2
+
+
+async def test_a_number_already_on_file_is_still_added_to_the_campaign(
+    client: AsyncClient, auth_headers: dict, agent: dict, lead: dict
+) -> None:
+    """A duplicate row still means "call this person".
+
+    Counting it as skipped and leaving it off the campaign would quietly drop
+    people from the list the user just uploaded.
+    """
+    campaign = await _make_campaign(client, auth_headers, agent)
+    csv = f"name,phone\n{lead['name']},{lead['phone_number']}\n".encode()
+
+    response = await client.post(
+        f"/campaigns/{campaign['id']}/leads/import",
+        files={"file": ("leads.csv", csv, "text/csv")},
+        headers=auth_headers,
+    )
+    body = response.json()
+    assert body["imported"] == 0
+    assert body["skipped"] == 1
+    assert body["attached"] == 1, "an existing lead must still join the campaign"
+
+
+async def test_do_not_call_leads_are_never_added_by_a_csv_upload(
+    client: AsyncClient, auth_headers: dict, agent: dict, lead: dict
+) -> None:
+    """A spreadsheet must not be able to override someone's opt-out."""
+    await client.patch(f"/leads/{lead['id']}", json={"status": "do_not_call"}, headers=auth_headers)
+    campaign = await _make_campaign(client, auth_headers, agent)
+    csv = f"name,phone\n{lead['name']},{lead['phone_number']}\n".encode()
+
+    response = await client.post(
+        f"/campaigns/{campaign['id']}/leads/import",
+        files={"file": ("leads.csv", csv, "text/csv")},
+        headers=auth_headers,
+    )
+    assert response.json()["attached"] == 0
+
+    listed = await client.get(f"/campaigns/{campaign['id']}/leads", headers=auth_headers)
+    assert listed.json()["total"] == 0
+
+
+async def test_campaign_import_rejects_a_non_csv(
+    client: AsyncClient, auth_headers: dict, agent: dict
+) -> None:
+    campaign = await _make_campaign(client, auth_headers, agent)
+    response = await client.post(
+        f"/campaigns/{campaign['id']}/leads/import",
+        files={"file": ("leads.xlsx", b"not a csv", "application/vnd.ms-excel")},
+        headers=auth_headers,
+    )
+    assert response.status_code == 422

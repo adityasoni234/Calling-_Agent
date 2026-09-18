@@ -141,13 +141,40 @@ export interface Lead {
   created_at: string
 }
 
+export interface LeadList {
+  id: string
+  name: string
+  source: string
+  source_filename: string | null
+  imported_count: number
+  skipped_count: number
+  /** Live membership count — drifts from imported_count as leads are deleted. */
+  lead_count: number
+  created_at: string
+}
+
 export interface ImportResult {
   imported: number
   skipped: number
   errors: string[]
+  /** The sheet this upload created, when it created one. */
+  lead_list: LeadList | null
 }
 
 // --- campaigns --------------------------------------------------------
+
+export interface CampaignImportResult {
+  imported: number
+  skipped: number
+  /** How many of the file's people are now on the campaign's call list. */
+  attached: number
+  errors: string[]
+}
+
+export interface DispatchResult {
+  started: number
+  reason: string
+}
 
 export type CampaignStatus = 'draft' | 'running' | 'paused' | 'completed' | 'stopped'
 

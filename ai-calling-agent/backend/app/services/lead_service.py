@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError
 from app.models.lead import Lead, LeadStatus
+from app.models.lead_list import LeadList, LeadListMember, LeadListSource
 
 _DIGITS = re.compile(r"[^\d+]")
 # Column names people actually use in exported CRM files.
@@ -61,8 +62,36 @@ class LeadService:
         await self.db.refresh(lead)
         return lead
 
+    async def unique_list_name(self, organization_id: uuid.UUID, wanted: str) -> str:
+        """Names are unique per organization, so re-uploading gets a suffix.
+
+        Silently merging a second "leads.csv" into the first would hide rows
+        the user expects to see as their own tab.
+        """
+        base = (wanted or "Untitled list").strip()[:150] or "Untitled list"
+        taken = set(
+            (
+                await self.db.execute(
+                    select(LeadList.name).where(LeadList.organization_id == organization_id)
+                )
+            ).scalars()
+        )
+        if base not in taken:
+            return base
+        for suffix in range(2, 1000):
+            candidate = f"{base} ({suffix})"
+            if candidate not in taken:
+                return candidate
+        return f"{base} ({uuid.uuid4().hex[:6]})"
+
     async def import_csv(
-        self, organization_id: uuid.UUID, content: bytes, *, default_country_code: str = "+91"
+        self,
+        organization_id: uuid.UUID,
+        content: bytes,
+        *,
+        default_country_code: str = "+91",
+        list_name: str | None = None,
+        source_filename: str | None = None,
     ) -> dict[str, Any]:
         text = content.decode("utf-8-sig", errors="replace")
         reader = csv.DictReader(io.StringIO(text))
@@ -75,7 +104,13 @@ class LeadService:
                     header_map[column] = field
 
         if "phone_number" not in header_map.values():
-            return {"imported": 0, "skipped": 0, "errors": ["No phone number column found"]}
+            return {
+                "imported": 0,
+                "skipped": 0,
+                "errors": ["No phone number column found"],
+                "phone_numbers": [],
+                "lead_list": None,
+            }
 
         existing = await self.db.execute(
             select(Lead.phone_number).where(Lead.organization_id == organization_id)
@@ -85,6 +120,9 @@ class LeadService:
         imported = 0
         skipped = 0
         errors: list[str] = []
+        # Every valid number in the file, new or already known. A campaign
+        # import needs these: a duplicate is still someone you want called.
+        phone_numbers: list[str] = []
 
         for line_number, row in enumerate(reader, start=2):
             values = {
@@ -98,9 +136,11 @@ class LeadService:
                 continue
             if phone in seen:
                 skipped += 1
+                phone_numbers.append(phone)
                 continue
 
             seen.add(phone)
+            phone_numbers.append(phone)
             self.db.add(
                 Lead(
                     organization_id=organization_id,
@@ -115,7 +155,67 @@ class LeadService:
             imported += 1
 
         await self.db.commit()
-        return {"imported": imported, "skipped": skipped, "errors": errors}
+
+        lead_list = None
+        if list_name and phone_numbers:
+            lead_list = LeadList(
+                organization_id=organization_id,
+                name=await self.unique_list_name(organization_id, list_name),
+                source=LeadListSource.CSV_IMPORT,
+                source_filename=source_filename,
+                imported_count=imported,
+                skipped_count=skipped,
+            )
+            self.db.add(lead_list)
+            await self.db.flush()
+            await self.add_to_list(lead_list, phone_numbers, organization_id)
+            await self.db.commit()
+            await self.db.refresh(lead_list)
+
+        return {
+            "imported": imported,
+            "skipped": skipped,
+            "errors": errors,
+            "phone_numbers": phone_numbers,
+            "lead_list": lead_list,
+        }
+
+    async def add_to_list(
+        self, lead_list: LeadList, phone_numbers: list[str], organization_id: uuid.UUID
+    ) -> int:
+        """File every number from the upload under this list.
+
+        Numbers already on file join the list too -- a duplicate row still
+        means "this person is on that sheet".
+        """
+        if not phone_numbers:
+            return 0
+        lead_ids = list(
+            (
+                await self.db.execute(
+                    select(Lead.id).where(
+                        Lead.organization_id == organization_id,
+                        Lead.phone_number.in_(phone_numbers),
+                    )
+                )
+            ).scalars()
+        )
+        already = set(
+            (
+                await self.db.execute(
+                    select(LeadListMember.lead_id).where(
+                        LeadListMember.lead_list_id == lead_list.id
+                    )
+                )
+            ).scalars()
+        )
+        added = 0
+        for lead_id in lead_ids:
+            if lead_id in already:
+                continue
+            self.db.add(LeadListMember(lead_list_id=lead_list.id, lead_id=lead_id))
+            added += 1
+        return added
 
     def search_filter(self, query: str):  # noqa: ANN201 - SQLAlchemy clause
         pattern = f"%{query.lower()}%"

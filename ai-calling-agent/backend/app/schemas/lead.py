@@ -62,7 +62,32 @@ class LeadRead(BaseModel):
     created_at: datetime
 
 
+class LeadListRead(BaseModel):
+    """One uploaded sheet, as the dashboard shows it on a tab."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    source: str
+    source_filename: str | None
+    imported_count: int
+    skipped_count: int
+    #: Live membership count, which drifts from imported_count as leads are
+    #: deleted -- the tab must show what is actually there now.
+    lead_count: int = 0
+    created_at: datetime
+
+
+class LeadListUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=160)
+
+
 class ImportResult(BaseModel):
     imported: int
     skipped: int
     errors: list[str]
+    #: The sheet this upload created, when it created one.
+    lead_list: LeadListRead | None = None

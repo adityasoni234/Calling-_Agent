@@ -9,6 +9,7 @@ const NAV = [
   { to: '/', label: 'Overview', end: true, icon: 'M3 12l9-9 9 9M5 10v10h14V10' },
   { to: '/agents', label: 'AI Agents', icon: 'M12 3a4 4 0 100 8 4 4 0 000-8zM4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1' },
   { to: '/leads', label: 'Leads', icon: 'M4 6h16M4 12h16M4 18h10' },
+  { to: '/qualified', label: 'Qualified Leads', icon: 'M20 6L9 17l-5-5' },
   { to: '/campaigns', label: 'Campaigns', icon: 'M3 11l18-7-7 18-2-8-9-3z' },
   { to: '/calls', label: 'Calls', icon: 'M3 5a2 2 0 012-2h2l2 5-2 1a12 12 0 006 6l1-2 5 2v2a2 2 0 01-2 2A16 16 0 013 5z' },
   { to: '/knowledge', label: 'Knowledge Base', icon: 'M4 5a2 2 0 012-2h12v18H6a2 2 0 01-2-2V5zM8 7h8M8 11h8' },

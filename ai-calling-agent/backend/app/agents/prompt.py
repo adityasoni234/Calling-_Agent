@@ -45,7 +45,27 @@ BASE_RULES = [
     "'got it' -- so it sounds like listening rather than reading a script.",
     "Never ask two things in one breath, and never repeat a question they have already answered.",
     "If they sound busy or annoyed, offer to call back instead of pushing.",
-    "When the call is finished, end your final line with the marker [END_CALL].",
+    "Show that you were listening: refer back to something specific they said "
+    "before asking the next thing. Never ask something they already answered.",
+    "Follow the interesting thread. If they mention a problem, a tool they use, "
+    "or a frustration, ask about that rather than returning to your script.",
+    "Judge them honestly as you go. Notice whether they actually have the need, "
+    "the means and the intent, and let that change how hard you push -- lean in "
+    "with someone genuinely interested, wrap up quickly with someone who is not.",
+    "Do not flatter, and do not agree with everything. If what they want is not "
+    "something you offer, say so plainly; it earns more trust than a vague yes.",
+    "Never end the call without saying goodbye, even if you are out of time.",
+    "Never close while they are still answering, still asking, or clearly still "
+    "engaged. If they are talking to you, the call is not over.",
+    "Close in this order, always: tell them a specialist from the team will reach "
+    "out with the details, ask plainly whether they would like that, wait for their "
+    "answer, then thank them by name and say goodbye. Do not skip the question -- "
+    "their answer is the whole point of the call.",
+    "If they say yes to that follow-up, confirm it back in one line: say the team "
+    "will call them on this number and roughly when. If they say no, thank them "
+    "warmly anyway and close without pushing.",
+    "Only after you have said goodbye, end that final line with the marker "
+    "[END_CALL]. Never put the marker on a line that still asks a question.",
 ]
 
 LANGUAGE_PREFERENCE_RULE = (
@@ -138,9 +158,17 @@ def build_turn_context(
     *,
     retrieved: list[str] | None = None,
     digest: str | None = None,
+    wrapping_up: bool = False,
 ) -> str:
     """The volatile half: appended per turn, never part of the cached prefix."""
     blocks = [f"[Current stage: {state.value}] {STATE_GUIDANCE[state]}"]
+
+    if wrapping_up:
+        blocks.append(
+            "[Time is nearly up] Bring this to a natural close within the next "
+            "reply or two. Confirm the next step, thank them, and end. Do not "
+            "start a new topic or ask another qualifying question."
+        )
 
     if digest:
         blocks.append(f"[Earlier in this call] {digest}")

@@ -93,3 +93,14 @@ class AddLeadsRequest(BaseModel):
 class DispatchResult(BaseModel):
     started: int
     reason: str
+
+
+class CampaignImportResult(BaseModel):
+    """Outcome of uploading a CSV straight onto a campaign."""
+
+    imported: int
+    skipped: int
+    #: How many of the file's people are now on this campaign's call list.
+    #: Higher than `imported` when the file contained people you already had.
+    attached: int
+    errors: list[str]

@@ -91,6 +91,38 @@ class CampaignService:
         # Window wrapping midnight.
         return local >= start or local <= end
 
+    async def reap_stale_calls(self, organization_id: uuid.UUID) -> int:
+        """Write off calls the provider never reported a terminal status for.
+
+        A dropped or failed status webhook leaves a call sitting in `initiated`,
+        `ringing` or `in_progress` forever. Those count towards the concurrency
+        cap, so a handful of them permanently wedges the dialler -- with the UI
+        truthfully reporting nothing is live while refusing to place calls.
+        """
+        cutoff = datetime.now(UTC) - timedelta(minutes=settings.stale_call_timeout_minutes)
+        result = await self.db.execute(
+            select(Call).where(
+                Call.organization_id == organization_id,
+                Call.status.in_(ACTIVE_CALL_STATUSES),
+                Call.created_at < cutoff,
+            )
+        )
+        stale = list(result.scalars())
+        for call in stale:
+            call.status = CallStatus.FAILED if call.answered_at is None else CallStatus.COMPLETED
+            call.end_reason = "stale_no_terminal_event"
+            call.ended_at = call.ended_at or call.created_at
+        if stale:
+            await self.db.commit()
+            for call in stale:
+                await self.on_call_finished(call)
+            log.warning(
+                "campaign.reaped_stale_calls",
+                organization_id=str(organization_id),
+                count=len(stale),
+            )
+        return len(stale)
+
     async def active_call_count(self, campaign_id: uuid.UUID) -> int:
         return int(
             await self.db.scalar(
@@ -114,15 +146,30 @@ class CampaignService:
             or 0
         )
 
-    async def dispatch(self, campaign_id: uuid.UUID) -> dict[str, int | str]:
-        """One dispatch tick. Returns what it did and why it stopped."""
+    async def dispatch(
+        self, campaign_id: uuid.UUID, *, force: bool = False
+    ) -> dict[str, int | str]:
+        """One dispatch tick. Returns what it did and why it stopped.
+
+        ``force`` is the "Dial now" button: a person is asking for a call this
+        second, so the calling window and the per-lead retry backoff give way.
+        Budget and concurrency caps do not -- those guard real money and real
+        carrier limits, and a button should not be able to spend past them.
+        """
         campaign = await self.db.get(Campaign, campaign_id)
         if campaign is None:
             return {"started": 0, "reason": "not_found"}
         if campaign.status is not CampaignStatus.RUNNING:
             return {"started": 0, "reason": f"status_{campaign.status.value}"}
-        if not self.within_calling_hours(campaign):
+        if not force and not self.within_calling_hours(campaign):
             return {"started": 0, "reason": "outside_calling_hours"}
+        if force and not self.within_calling_hours(campaign):
+            log.warning(
+                "campaign.dispatch_forced_outside_hours",
+                campaign_id=str(campaign.id),
+                window=f"{campaign.calling_hours_start}-{campaign.calling_hours_end}",
+                timezone=campaign.timezone,
+            )
 
         allowed, budget_reason = await CostService(self.db).can_start_call(campaign.organization_id)
         if not allowed:
@@ -141,6 +188,9 @@ class CampaignService:
                 await self.set_status(campaign, CampaignStatus.PAUSED)
                 return {"started": 0, "reason": "campaign_budget_reached"}
 
+        # Ghost calls from dropped webhooks would otherwise fill the cap forever.
+        await self.reap_stale_calls(campaign.organization_id)
+
         # An organization-level cap wins; otherwise the deployment-wide one.
         organization = await self.db.get(Organization, campaign.organization_id)
         global_cap = (
@@ -156,7 +206,7 @@ class CampaignService:
         if slots <= 0:
             return {"started": 0, "reason": "at_concurrency_limit"}
 
-        due = await self._due_leads(campaign, limit=slots)
+        due = await self._due_leads(campaign, limit=slots, ignore_backoff=force)
         if not due:
             if await self._is_exhausted(campaign):
                 await self.set_status(campaign, CampaignStatus.COMPLETED)
@@ -185,7 +235,7 @@ class CampaignService:
         return {"started": started, "reason": "dispatched"}
 
     async def _due_leads(
-        self, campaign: Campaign, *, limit: int
+        self, campaign: Campaign, *, limit: int, ignore_backoff: bool = False
     ) -> list[tuple[CampaignLead, Lead]]:
         now = datetime.now(UTC)
         result = await self.db.execute(
@@ -202,7 +252,8 @@ class CampaignService:
         due: list[tuple[CampaignLead, Lead]] = []
         for membership, lead in result.all():
             if (
-                membership.next_attempt_at
+                not ignore_backoff
+                and membership.next_attempt_at
                 and membership.next_attempt_at.replace(
                     tzinfo=membership.next_attempt_at.tzinfo or UTC
                 )

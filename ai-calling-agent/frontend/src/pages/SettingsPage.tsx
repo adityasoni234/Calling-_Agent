@@ -15,7 +15,7 @@ import {
   useRepriceCalls,
   useUpdateOrganization,
 } from '@/hooks/api'
-import { ApiError } from '@/lib/api'
+import { ApiError, NetworkError } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 import type { PlatformSettings } from '@/types/api'
 
@@ -210,7 +210,7 @@ function RateDialog({ onClose }: { onClose: () => void }) {
       })
       onClose()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save the rate')
+      setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Could not save the rate')
     }
   }
 
@@ -319,7 +319,7 @@ function BudgetCard({ settings }: { settings: PlatformSettings }) {
       })
       setSaved(true)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save the limits')
+      setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Could not save the limits')
     }
   }
 

@@ -34,8 +34,12 @@ def upgrade() -> None:
         sa.Column("slug", sa.String(length=80), nullable=False),
         sa.Column("timezone", sa.String(length=64), nullable=False, server_default="Asia/Kolkata"),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_organizations")),
     )
     op.create_index(op.f("ix_organizations_slug"), "organizations", ["slug"], unique=True)
@@ -55,8 +59,12 @@ def upgrade() -> None:
         ),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(
             ["organization_id"],
             ["organizations.id"],
@@ -78,10 +86,17 @@ def upgrade() -> None:
         sa.Column("replaced_by_id", sa.Uuid(as_uuid=True), nullable=True),
         sa.Column("user_agent", sa.String(length=400), nullable=True),
         sa.Column("ip_address", sa.String(length=64), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(
-            ["user_id"], ["users.id"], name=op.f("fk_refresh_tokens_user_id_users"), ondelete="CASCADE"
+            ["user_id"],
+            ["users.id"],
+            name=op.f("fk_refresh_tokens_user_id_users"),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["replaced_by_id"],
@@ -91,7 +106,9 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_refresh_tokens")),
     )
-    op.create_index(op.f("ix_refresh_tokens_token_hash"), "refresh_tokens", ["token_hash"], unique=True)
+    op.create_index(
+        op.f("ix_refresh_tokens_token_hash"), "refresh_tokens", ["token_hash"], unique=True
+    )
     op.create_index(op.f("ix_refresh_tokens_user_id"), "refresh_tokens", ["user_id"])
 
 

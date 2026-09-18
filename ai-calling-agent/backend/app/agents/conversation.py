@@ -24,7 +24,7 @@ from typing import Protocol
 
 from app.agents.prompt import build_greeting, build_system_prompt, build_turn_context
 from app.agents.state import ConversationState, customer_is_closing, next_state
-from app.core.audio import frame_duration_ms
+from app.core.audio import frame_duration_ms, rms_dbfs
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.agent import Agent
@@ -40,12 +40,15 @@ TRANSFER_MARKER = "[TRANSFER]"
 # Split on sentence enders so the first clause reaches TTS while the model is
 # still generating the rest. This is most of the perceived latency win.
 _SENTENCE = re.compile(r"(?<=[.!?।])\s+")
+#: Clause breaks, used only to get the *first* audio out sooner.
+_CLAUSE = re.compile(r"(?<=[,;:])\s+")
+#: Below this a clause is too short to sound natural on its own.
+FIRST_CLAUSE_MIN_CHARS = 45
 # How long to wait for the customer to finish a sentence before replying.
 # Measured against live Deepgram output: a single spoken sentence often
 # arrives as two or three finals, and 0.3s was too tight to reassemble them.
 # An explicit UtteranceEnd still dispatches immediately, so this only costs
 # latency when the provider gives us no endpointing signal.
-TURN_DEBOUNCE_SECONDS = 0.6
 
 
 class AudioSink(Protocol):
@@ -116,6 +119,12 @@ class ConversationManager:
         self._turn_timer: asyncio.Task[None] | None = None
         self._turn_task: asyncio.Task[None] | None = None
         self._speech_queue: asyncio.Queue[str] = asyncio.Queue()
+        self._speaking_since = 0.0
+        self._loud_since = 0.0
+        self._interrupted_text = ""
+        self._recover_task: asyncio.Task[None] | None = None
+        self._current_utterance = ""
+        self._wrapping_up = False
 
     # --- public -------------------------------------------------------
 
@@ -138,7 +147,14 @@ class ConversationManager:
             self.result.end_reason = "canceled"
             raise
         finally:
-            for task in (watchdog, consumer, speaker, self._turn_task, self._turn_timer):
+            for task in (
+                watchdog,
+                consumer,
+                speaker,
+                self._turn_task,
+                self._turn_timer,
+                self._recover_task,
+            ):
                 if task is not None and not task.done():
                     task.cancel()
             await self._stop_speaking()
@@ -165,17 +181,27 @@ class ConversationManager:
             self._last_activity = time.monotonic()
 
             if event.type is STTEventType.SPEECH_STARTED:
-                await self._handle_barge_in()
+                # Deliberately not an interruption on its own: this fires on a
+                # cough, room noise, or echo of the agent's own voice.
+                pass
 
             elif event.type is STTEventType.PARTIAL:
-                # A partial with real words is the earliest reliable signal that
-                # the customer is talking; not every provider sends VAD events.
-                if self._speaking and len(event.text.split()) >= 2:
+                # Real words are the only reliable evidence that a person is
+                # talking over us.
+                if len(event.text.split()) >= settings.barge_in_min_words:
                     await self._handle_barge_in()
 
             elif event.type is STTEventType.FINAL and event.text.strip():
+                # A final transcript is proof, whatever its length.
+                await self._handle_barge_in(force=True)
+                # A real transcript arrived, so the interruption was genuine.
+                self._interrupted_text = ""
+                if self._recover_task is not None and not self._recover_task.done():
+                    self._recover_task.cancel()
                 self._pending_text = f"{self._pending_text} {event.text}".strip()
-                self._schedule_turn()
+                # Deepgram's endpointing has already decided the customer stopped,
+                # so waiting out the debounce on top of it is dead air.
+                self._schedule_turn(immediate=event.speech_final)
 
             elif event.type is STTEventType.UTTERANCE_END and self._pending_text:
                 # The provider says the customer has stopped; no need to wait.
@@ -191,7 +217,7 @@ class ConversationManager:
         """
         if self._turn_timer is not None and not self._turn_timer.done():
             self._turn_timer.cancel()
-        delay = 0.0 if immediate else TURN_DEBOUNCE_SECONDS
+        delay = 0.0 if immediate else settings.turn_debounce_seconds
         self._turn_timer = asyncio.create_task(self._run_turn(delay))
 
     async def _run_turn(self, delay: float) -> None:
@@ -207,21 +233,71 @@ class ConversationManager:
         with contextlib.suppress(asyncio.CancelledError):
             await self._turn_task
 
-    async def _handle_barge_in(self) -> None:
+    def note_inbound_audio(self, chunk: bytes) -> None:
+        """Record how loud the caller's line is.
+
+        Used as a gate on barge-in: a transcript produced from a quiet line is
+        far more likely to be echo or noise than someone speaking.
+        """
+        if rms_dbfs(chunk) >= settings.barge_in_min_dbfs:
+            self._loud_since = time.monotonic()
+
+    def _may_interrupt(self) -> bool:
         if not (self._speaking and self.agent.interruptible and settings.barge_in_enabled):
+            return False
+        # Give each utterance a moment before it can be cut off, so the tail of
+        # our own audio coming back does not interrupt us.
+        started = time.monotonic() - self._speaking_since
+        if started * 1000 < settings.barge_in_grace_ms:
+            return False
+        # Something must actually have been loud on the line recently.
+        return (time.monotonic() - self._loud_since) < 1.0
+
+    async def _handle_barge_in(self, *, force: bool = False) -> None:
+        if not force and not self._may_interrupt():
             return
-        log.info("conversation.barge_in")
+        if not self._speaking:
+            return
+
+        log.info("conversation.barge_in", forced=force)
         self._pending_barge_in = True
+        # Keep what we were saying: if no transcript follows, this was noise and
+        # we finish the sentence rather than leaving the caller in silence.
+        self._interrupted_text = self._current_utterance
         await self._stop_speaking()
         # Drop whatever the carrier still has buffered, or the agent keeps
         # talking for another second after we stopped generating.
         await self.sink.clear()
+        self._arm_recovery()
+
+    def _arm_recovery(self) -> None:
+        """Resume if the interruption turns out to have been nothing."""
+        if self._recover_task is not None and not self._recover_task.done():
+            self._recover_task.cancel()
+        self._recover_task = asyncio.create_task(self._recover_after_false_barge_in())
+
+    async def _recover_after_false_barge_in(self) -> None:
+        await asyncio.sleep(settings.barge_in_recover_ms / 1000)
+        # A real interruption produces a transcript, which clears this.
+        if self._finished.is_set() or self._pending_text or not self._interrupted_text:
+            return
+        if self._turn_task is not None and not self._turn_task.done():
+            return
+        log.info("conversation.barge_in_recovered")
+        text, self._interrupted_text = self._interrupted_text, ""
+        self._pending_barge_in = False
+        await self._enqueue_speech(text)
 
     async def _handle_customer_turn(self, text: str) -> None:
         # The customer has spoken, so stop talking even if no VAD event fired.
         await self._stop_speaking()
+        # The flag has done its job (it stopped the previous utterance). Clear
+        # it here or it suppresses the reply we are about to generate.
+        interrupted, self._pending_barge_in = self._pending_barge_in, False
         started = time.monotonic()
-        self._record(Turn(role="customer", content=text, state=self._state.value))
+        self._record(
+            Turn(role="customer", content=text, state=self._state.value, barge_in=interrupted)
+        )
         self._history.append(LLMMessage(role="user", content=text))
 
         self._state = next_state(self._state, text, turn_count=self._turn_index)
@@ -235,13 +311,22 @@ class ConversationManager:
             except Exception as exc:  # retrieval must never kill a live call
                 log.warning("conversation.retrieval_failed", error=str(exc))
 
-        context = build_turn_context(self._state, retrieved=retrieved, digest=self._digest())
+        context = build_turn_context(
+            self._state,
+            retrieved=retrieved,
+            digest=self._digest(),
+            wrapping_up=self._wrapping_up,
+        )
         messages = self._compact_history()
         messages.append(LLMMessage(role="user", content=context))
 
         await self._speak_reply(messages, latency_from=started)
 
         if self._state is ConversationState.COMPLETE or customer_is_closing(text):
+            # Let the closing line actually reach the caller. Finishing here
+            # without draining the queue cuts the goodbye off mid-word, which
+            # is what made the agent seem to hang up on people.
+            await self._drain_speech()
             await self._finish("completed")
 
     @staticmethod
@@ -296,6 +381,8 @@ class ConversationManager:
                 self._speech_queue.task_done()
 
     async def _play(self, text: str) -> None:
+        self._current_utterance = text
+        self._speaking_since = time.monotonic()
         task = asyncio.create_task(self._pump_audio(text))
         self._speak_task = task
         try:
@@ -335,6 +422,12 @@ class ConversationManager:
                 # clause is already playing while the rest is still generating.
                 while True:
                     parts = _SENTENCE.split(buffer, maxsplit=1)
+                    # Until something has been said, the caller is sitting in
+                    # silence waiting for a whole sentence to finish generating.
+                    # Break at the first clause instead; the rest queues in
+                    # behind it and plays without a seam.
+                    if len(parts) < 2 and not spoken and len(buffer) >= FIRST_CLAUSE_MIN_CHARS:
+                        parts = _CLAUSE.split(buffer, maxsplit=1)
                     if len(parts) < 2:
                         break
                     sentence, buffer = parts[0].strip(), parts[1]
@@ -380,11 +473,20 @@ class ConversationManager:
 
         if transfer:
             self.result.transfer_requested = True
-            await self._speech_queue.join()
+            await self._drain_speech()
             await self._finish("transfer_requested")
         elif end_call:
-            await self._speech_queue.join()
+            await self._drain_speech()
             await self._finish("agent_ended")
+
+    #: Longest we will hold a call open waiting for queued audio to finish.
+    _DRAIN_TIMEOUT = 20.0
+
+    async def _drain_speech(self) -> None:
+        """Wait for queued audio to finish playing, but never hang on it."""
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+            async with asyncio.timeout(self._DRAIN_TIMEOUT):
+                await self._speech_queue.join()
 
     @staticmethod
     def _strip_markers(text: str, end_call: bool, transfer: bool) -> tuple[str, bool, bool]:
@@ -449,7 +551,23 @@ class ConversationManager:
                 continue
 
             idle_ms = (time.monotonic() - self._last_activity) * 1000
-            if (time.monotonic() - self._started_at) > self.agent.max_call_seconds:
+            elapsed = time.monotonic() - self._started_at
+
+            # Warn the model before the cap so it can land the conversation
+            # rather than being cut off mid-sentence.
+            if not self._wrapping_up and elapsed > self.agent.max_call_seconds * 0.75:
+                self._wrapping_up = True
+                log.info("conversation.wrapping_up", elapsed=int(elapsed))
+
+            if elapsed > self.agent.max_call_seconds:
+                # Never drop the line silently: say goodbye first. Hanging up
+                # mid-conversation with no word is the rudest thing an agent
+                # can do, and it reads as a broken system.
+                await self._say(
+                    "I have taken enough of your time for now. Thank you so much, "
+                    "and I will follow up. Have a good day.",
+                    state=ConversationState.COMPLETE,
+                )
                 await self._finish("max_duration")
                 return
 

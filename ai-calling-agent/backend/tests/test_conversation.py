@@ -333,3 +333,155 @@ async def test_fragmented_finals_are_merged_into_one_utterance() -> None:
 
     customer_turns = [turn.content for turn in result.turns if turn.role == "customer"]
     assert customer_turns == ["haan boliye kaun bol raha hai?"]
+
+
+async def test_vad_alone_does_not_interrupt_the_agent() -> None:
+    """A cough, room noise, or echo of our own voice fires the provider's VAD.
+
+    Cancelling on that made the agent stop talking constantly, and with no
+    transcript to follow it just sat silent — reported as the agent "hanging".
+    """
+    sink = RecordingSink()
+    stt = ScriptedSTT(
+        [
+            (0.2, STTEvent(STTEventType.SPEECH_STARTED)),
+            (0.2, STTEvent(STTEventType.SPEECH_STARTED)),
+        ]
+    )
+    manager = ConversationManager(
+        agent=make_agent(),
+        stt=stt,
+        llm=MockLLMProvider(),
+        tts=SlowTTS(),
+        sink=sink,
+        pace_audio=False,
+    )
+    task = asyncio.create_task(manager.run())
+    await asyncio.sleep(0.9)
+    await manager.stop("test")
+    await asyncio.wait_for(task, timeout=3)
+
+    assert sink.clears == 0, "VAD alone must not cut the agent off"
+
+
+async def test_a_quiet_line_does_not_interrupt() -> None:
+    """Partials produced from a silent line are echo or noise, not speech."""
+    sink = RecordingSink()
+    stt = ScriptedSTT([(0.7, STTEvent(STTEventType.PARTIAL, text="uh huh yeah"))])
+    manager = ConversationManager(
+        agent=make_agent(),
+        stt=stt,
+        llm=MockLLMProvider(),
+        tts=SlowTTS(),
+        sink=sink,
+        pace_audio=False,
+    )
+    task = asyncio.create_task(manager.run())
+    # No audio is fed in, so the line has never been loud.
+    await asyncio.sleep(1.1)
+    await manager.stop("test")
+    await asyncio.wait_for(task, timeout=3)
+
+    assert sink.clears == 0
+
+
+async def test_real_speech_on_a_loud_line_does_interrupt() -> None:
+    """The gate must not block a genuine interruption."""
+    sink = RecordingSink()
+    stt = ScriptedSTT([(0.7, STTEvent(STTEventType.PARTIAL, text="ruko ek minute"))])
+    manager = ConversationManager(
+        agent=make_agent(),
+        stt=stt,
+        llm=MockLLMProvider(),
+        tts=SlowTTS(),
+        sink=sink,
+        pace_audio=False,
+    )
+    task = asyncio.create_task(manager.run())
+    await asyncio.sleep(0.5)
+    # Loud audio, as a real caller's line would be.
+    manager.note_inbound_audio(bytes(range(120, 136)) * 20)
+    await asyncio.sleep(0.6)
+    await manager.stop("test")
+    await asyncio.wait_for(task, timeout=3)
+
+    assert sink.clears >= 1, "a real interruption must still cut the agent off"
+
+
+async def test_a_false_interruption_resumes_instead_of_leaving_silence() -> None:
+    """If nothing was actually said, finish the sentence rather than hang."""
+    sink = RecordingSink()
+    stt = ScriptedSTT([(0.7, STTEvent(STTEventType.PARTIAL, text="hmm okay"))])
+    manager = ConversationManager(
+        agent=make_agent(),
+        stt=stt,
+        llm=MockLLMProvider(),
+        tts=SlowTTS(),
+        sink=sink,
+        pace_audio=False,
+    )
+    task = asyncio.create_task(manager.run())
+    await asyncio.sleep(0.5)
+    manager.note_inbound_audio(bytes(range(120, 136)) * 20)
+    await asyncio.sleep(0.4)
+    assert sink.clears >= 1, "the noise should have interrupted"
+
+    frames_at_interrupt = len(sink.frames)
+    # No transcript follows, so the recovery window elapses and speech resumes.
+    await asyncio.sleep(2.0)
+    assert len(sink.frames) > frames_at_interrupt, "the agent should have resumed speaking"
+
+    await manager.stop("test")
+    await asyncio.wait_for(task, timeout=3)
+
+
+async def test_end_of_speech_is_answered_without_waiting_out_the_debounce() -> None:
+    """The debounce exists for mid-sentence finals only.
+
+    When the provider's endpointing says the customer has stopped, waiting the
+    full debounce on top of it is dead air the caller hears as a slow agent.
+    """
+    stt = ScriptedSTT([(0.05, STTEvent(STTEventType.FINAL, text="haan boliye", speech_final=True))])
+    manager = ConversationManager(
+        agent=make_agent(),
+        stt=stt,
+        llm=MockLLMProvider(),
+        tts=SlowTTS(),
+        sink=RecordingSink(),
+        pace_audio=False,
+    )
+    task = asyncio.create_task(manager.run())
+    # Comfortably under 0.05 + the 0.6s debounce, so only an immediate
+    # dispatch can have produced a reply by now.
+    await asyncio.sleep(0.35)
+    await manager.stop("test")
+    result = await asyncio.wait_for(task, timeout=3)
+
+    assert [turn.content for turn in result.turns if turn.role == "customer"] == ["haan boliye"]
+    assert any(turn.role == "agent" for turn in result.turns[1:])
+
+
+async def test_a_mid_sentence_final_still_waits_for_the_rest() -> None:
+    """Without the end-of-speech flag the debounce must still merge fragments."""
+    stt = ScriptedSTT(
+        [
+            (0.05, STTEvent(STTEventType.FINAL, text="haan")),
+            (0.15, STTEvent(STTEventType.FINAL, text="boliye kaun hai?")),
+        ]
+    )
+    manager = ConversationManager(
+        agent=make_agent(),
+        stt=stt,
+        llm=MockLLMProvider(),
+        tts=SlowTTS(),
+        sink=RecordingSink(),
+        pace_audio=False,
+    )
+    task = asyncio.create_task(manager.run())
+    await asyncio.sleep(1.4)
+    await manager.stop("test")
+    result = await asyncio.wait_for(task, timeout=3)
+
+    assert [turn.content for turn in result.turns if turn.role == "customer"] == [
+        "haan boliye kaun hai?"
+    ]

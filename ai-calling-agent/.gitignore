@@ -27,6 +27,10 @@ dist-ssr/
 .idea/
 .DS_Store
 
+# firebase deploy cache (machine-local)
+.firebase/
+firebase-debug.log
+
 # runtime
 uploads/
 *.log

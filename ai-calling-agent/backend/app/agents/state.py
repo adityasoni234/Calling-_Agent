@@ -21,6 +21,7 @@ class ConversationState(enum.StrEnum):
     HANDLE_OBJECTIONS = "handle_objections"
     CALL_TO_ACTION = "call_to_action"
     COLLECT_DETAILS = "collect_details"
+    CONFIRM_INTEREST = "confirm_interest"
     COMPLETE = "complete"
 
 
@@ -31,8 +32,11 @@ LINEAR_ORDER = [
     ConversationState.QUALIFY,
     ConversationState.CALL_TO_ACTION,
     ConversationState.COLLECT_DETAILS,
-    ConversationState.COMPLETE,
+    ConversationState.CONFIRM_INTEREST,
 ]
+# COMPLETE is deliberately absent above. Walking the list used to end the call
+# after six turns whether or not the customer was mid-sentence -- the call only
+# completes when the customer closes it or the model decides it is done.
 
 STATE_GUIDANCE = {
     ConversationState.GREETING: ("Greet warmly and confirm you are speaking to the right person."),
@@ -53,7 +57,15 @@ STATE_GUIDANCE = {
     ConversationState.COLLECT_DETAILS: (
         "Collect the contact details you still need, one field at a time."
     ),
-    ConversationState.COMPLETE: "Thank them and close the call politely.",
+    ConversationState.CONFIRM_INTEREST: (
+        "Before closing: tell them a specialist from the team will reach out with "
+        "the details, and ask plainly whether they would like that. Wait for their "
+        "answer -- it decides whether this lead is followed up."
+    ),
+    ConversationState.COMPLETE: (
+        "Close warmly. Thank them by name, confirm what happens next, and say "
+        "goodbye. Never hang up without saying goodbye."
+    ),
 }
 
 # Deliberately code-mixed: customers say these in English, Hindi, or both.
@@ -67,8 +79,13 @@ _OBJECTION = re.compile(
     r"|later|busy|think about|mehnga|mehanga|nahi chahiye|abhi nahi|baad mein|paisa)\b",
     re.IGNORECASE,
 )
+# Only unmistakable farewells and hard declines. A bare "thank you" is ordinary
+# politeness mid-call in Indian English, and treating it as a goodbye cut live
+# conversations off in the middle of a sentence.
 _CLOSING = re.compile(
-    r"\b(bye|goodbye|thank you|thanks|hang up|rakhta hoon|rakhti hoon|dhanyavaad|theek hai bye)\b",
+    r"\b(bye|good\s?bye|alvida|khuda\s?hafiz|hang up|hanging up"
+    r"|rakhta hoon|rakhti hoon|phone rakh\w*|call rakh\w*|band kar\w*"
+    r"|no thanks|no thank you|not interested at all)\b",
     re.IGNORECASE,
 )
 _AGREEMENT = re.compile(

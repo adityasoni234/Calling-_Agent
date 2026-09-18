@@ -116,6 +116,9 @@ async def media_stream(websocket: WebSocket, call_id: uuid.UUID) -> None:
 
             audio = provider.decode_media(message)
             if audio:
+                # Loudness gates barge-in: a transcript from a quiet line is
+                # more likely echo or room noise than someone speaking.
+                manager.note_inbound_audio(audio)
                 await stt_session.send_audio(audio)
 
             if conversation.done():

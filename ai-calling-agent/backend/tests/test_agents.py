@@ -169,3 +169,37 @@ def test_blueprint_coerces_malformed_model_output() -> None:
     assert blueprint.ending_rules == ["End once a trial is booked"]
     assert blueprint.objection_handling[0].objection == "too costly"
     assert len(blueprint.objection_handling) == 1
+
+
+def test_a_job_word_is_never_used_as_the_persona_name() -> None:
+    """A caller who hears "Hi, this is manager" knows it is a bot."""
+    from app.services.agent_builder import AgentBlueprint
+
+    for role in ["manager", "Sales Executive", "AI assistant", "  agent "]:
+        blueprint = AgentBlueprint(
+            name=role,
+            role_title="Advisor",
+            personality="Warm.",
+            primary_objective="Qualify.",
+            greeting="Hello.",
+        )
+        assert blueprint.name.isalpha()
+        assert blueprint.name.lower() not in {
+            "manager",
+            "sales executive",
+            "ai assistant",
+            "agent",
+        }
+
+
+def test_a_real_persona_name_survives_untouched() -> None:
+    from app.services.agent_builder import AgentBlueprint
+
+    blueprint = AgentBlueprint(
+        name="  Riya ",
+        role_title="Advisor",
+        personality="Warm.",
+        primary_objective="Qualify.",
+        greeting="Hello.",
+    )
+    assert blueprint.name == "Riya"

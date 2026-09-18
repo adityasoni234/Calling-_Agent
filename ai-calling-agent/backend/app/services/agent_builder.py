@@ -30,6 +30,10 @@ You design configurations for AI voice agents that make real phone calls.
 Given a short description of a business and what the call should achieve, write
 a complete agent configuration. Rules that matter:
 
+- The name is a real human first name the customer will hear and repeat back --
+  "Riya", "Arjun", "Sara". Never a job word like "manager", "agent", "advisor"
+  or "assistant", and never the company name. Match it to the language and
+  market the call is placed in.
 - The greeting is spoken aloud in the first two seconds. Keep it under 25 words,
   and make it sound like a person, not an advert.
 - Qualification questions must be things a human would actually ask on a call,
@@ -81,10 +85,43 @@ class ObjectionResponse(BaseModel):
     response: str = Field(description="How to answer, one or two sentences", max_length=600)
 
 
+# A caller who hears "Hi, this is manager" hangs up. Models reach for the role
+# word often enough that the prompt alone cannot be trusted with it.
+_ROLE_WORDS = {
+    "agent",
+    "advisor",
+    "adviser",
+    "assistant",
+    "associate",
+    "bot",
+    "consultant",
+    "executive",
+    "manager",
+    "operator",
+    "representative",
+    "rep",
+    "sales",
+    "support",
+    "team",
+    "specialist",
+    "officer",
+    "caller",
+    "ai",
+}
+_FALLBACK_NAMES = ("Riya", "Arjun", "Sara", "Kabir", "Anaya", "Neel")
+
+
+def _looks_like_a_role(name: str) -> bool:
+    words = [word for word in re.split(r"[^A-Za-z]+", name.lower()) if word]
+    return not words or all(word in _ROLE_WORDS for word in words)
+
+
 class AgentBlueprint(BaseModel):
     """The content half of an agent. Technical settings keep their defaults."""
 
-    name: str = Field(description="First name of the agent persona", max_length=60)
+    name: str = Field(
+        description="A real human first name for the persona, never a job word", max_length=60
+    )
     role_title: str = Field(description="Their job title", max_length=120)
     personality: str = Field(description="Two lines on tone and manner", max_length=600)
     primary_objective: str = Field(description="The one goal of the call", max_length=400)
@@ -93,6 +130,16 @@ class AgentBlueprint(BaseModel):
     qualification_questions: list[str] = Field(default_factory=list, max_length=6)
     forbidden_rules: list[str] = Field(default_factory=list, max_length=8)
     ending_rules: list[str] = Field(default_factory=list, max_length=5)
+
+    @field_validator("name")
+    @classmethod
+    def _must_be_a_person(cls, value: str) -> str:
+        name = " ".join(value.split()).strip(" .,-")
+        if _looks_like_a_role(name):
+            # Deterministic, so regenerating the same brief is not a lottery.
+            return _FALLBACK_NAMES[len(name) % len(_FALLBACK_NAMES)]
+        return name
+
     objection_handling: list[ObjectionResponse] = Field(
         default_factory=list,
         max_length=6,

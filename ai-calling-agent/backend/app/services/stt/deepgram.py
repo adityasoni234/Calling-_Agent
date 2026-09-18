@@ -58,12 +58,14 @@ class DeepgramSTTSession(STTSession):
                     text = (alternative.get("transcript") or "").strip()
                     if not text:
                         continue
-                    is_final = bool(payload.get("is_final")) or bool(payload.get("speech_final"))
+                    speech_final = bool(payload.get("speech_final"))
+                    is_final = bool(payload.get("is_final")) or speech_final
                     yield STTEvent(
                         STTEventType.FINAL if is_final else STTEventType.PARTIAL,
                         text=text,
                         confidence=float(alternative.get("confidence") or 0.0),
                         language=alternative.get("language"),
+                        speech_final=speech_final,
                     )
         except websockets.ConnectionClosed:
             return
@@ -109,8 +111,11 @@ class DeepgramSTTProvider(STTProvider):
             # Interim results and endpointing are what barge-in is built on.
             "interim_results": "true",
             "vad_events": "true",
-            "endpointing": "300",
-            "utterance_end_ms": "1000",
+            "endpointing": str(settings.stt_endpointing_ms),
+            "utterance_end_ms": str(settings.stt_utterance_end_ms),
+            # Drop "um" and "uh": they are not turns, and treating them as such
+            # made the agent respond to hesitation.
+            "filler_words": "false",
         }
         url = f"{DEEPGRAM_WS}?{urlencode(params)}"
         try:

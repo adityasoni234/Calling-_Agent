@@ -134,3 +134,53 @@ async def test_reprocess_endpoint(
     body = detail.json()
     assert body["summary"]
     assert len(body["turns"]) == len(TRANSCRIPT)
+
+
+async def test_agreeing_to_a_callback_makes_the_lead_warm(db_session, completed_call: Call) -> None:
+    """The closing question exists to produce this signal; a yes must not be lost.
+
+    Someone who agreed out loud to being called back belongs in the qualified
+    pipeline even when the model read the rest of the call as lukewarm.
+    """
+    lead = await db_session.get(Lead, completed_call.lead_id)
+    lead.status = LeadStatus.NEW
+    lead.lead_score = 10
+    await db_session.commit()
+
+    await PostCallService(db_session)._apply_to_lead(
+        completed_call.lead_id,
+        CallExtraction(
+            outcome="unknown",
+            interest_level=InterestLevel.LOW,
+            lead_score=20,
+            followup_opt_in=True,
+        ),
+    )
+
+    await db_session.refresh(lead)
+    assert lead.status is LeadStatus.INTERESTED
+    assert lead.lead_score >= 60
+    assert lead.follow_up_at is not None
+
+
+async def test_a_polite_goodbye_is_not_treated_as_a_callback_agreement(
+    db_session, completed_call: Call
+) -> None:
+    """Without the opt-in, a low-interest call must stay low-interest."""
+    lead = await db_session.get(Lead, completed_call.lead_id)
+    lead.status = LeadStatus.NEW
+    await db_session.commit()
+
+    await PostCallService(db_session)._apply_to_lead(
+        completed_call.lead_id,
+        CallExtraction(
+            outcome="unknown",
+            interest_level=InterestLevel.LOW,
+            lead_score=20,
+            followup_opt_in=False,
+        ),
+    )
+
+    await db_session.refresh(lead)
+    assert lead.status is LeadStatus.NOT_INTERESTED
+    assert lead.lead_score == 20

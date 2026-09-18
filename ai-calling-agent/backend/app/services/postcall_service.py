@@ -35,6 +35,10 @@ class CallExtraction(BaseModel):
     timeline: str = Field(default="", max_length=200)
     interest_level: InterestLevel = InterestLevel.UNKNOWN
     objections: list[str] = Field(default_factory=list)
+    #: The customer was asked whether the team should reach out, and said yes.
+    #: This is a stated intention, not an inference from tone -- it is the one
+    #: signal the closing question exists to capture.
+    followup_opt_in: bool = False
     follow_up_required: bool = False
     follow_up_time: datetime | None = None
     lead_score: int = Field(default=0, ge=0, le=100)
@@ -110,6 +114,10 @@ class PostCallService:
             "Summarise this call in two or three sentences and extract the structured "
             "fields. Score the lead from 0 to 100 based only on stated interest, "
             "budget fit, and urgency.\n\n"
+            "Set followup_opt_in to true only if the agent asked whether the team "
+            "should reach out and the customer agreed. A polite 'ok' or 'thank you' "
+            "at the end of a call is not agreement. If the question was never asked, "
+            "or they declined, it is false.\n\n"
             f"Transcript:\n{transcript}"
         )
         try:
@@ -146,6 +154,18 @@ class PostCallService:
                 InterestLevel.MEDIUM: LeadStatus.INTERESTED,
                 InterestLevel.LOW: LeadStatus.NOT_INTERESTED,
             }.get(extraction.interest_level, LeadStatus.CONTACTED)
+        # Someone who agreed to be called back is a warm lead whatever the model
+        # scored the conversation at -- they said yes out loud.
+        if extraction.followup_opt_in and status in {
+            LeadStatus.CONTACTED,
+            LeadStatus.NEW,
+            LeadStatus.NOT_INTERESTED,
+        }:
+            status = LeadStatus.INTERESTED
+        if extraction.followup_opt_in:
+            lead.lead_score = max(lead.lead_score, 60)
+            lead.follow_up_at = lead.follow_up_at or datetime.now(UTC) + timedelta(days=1)
+
         # A do-not-call decision is never walked back by a later heuristic.
         if lead.status != LeadStatus.DO_NOT_CALL:
             lead.status = status

@@ -10,9 +10,12 @@ import type {
   CallDetail,
   Campaign,
   CampaignDetail,
+  CampaignImportResult,
   CampaignLeadRow,
+  DispatchResult,
   ImportResult,
   KnowledgeBase,
+  LeadList,
   KnowledgeDocument,
   Lead,
   Page,
@@ -98,14 +101,73 @@ export function useDeleteAgent() {
 
 // --- leads ------------------------------------------------------------
 
-export function useLeads(params: { page: number; search?: string; status?: string }) {
+export interface LeadQuery {
+  page: number
+  search?: string
+  status?: string
+  /** Comma-separated, for views spanning several statuses ("qualified,converted"). */
+  statuses?: string
+  min_score?: number
+  sort?: 'recent' | 'score' | 'name' | 'last_called'
+  /** Restrict to one uploaded sheet. */
+  list_id?: string
+  page_size?: number
+}
+
+export function useLeads(params: LeadQuery) {
   return useQuery({
     queryKey: ['leads', params],
     queryFn: () =>
       api.get<Page<Lead>>(
-        `/leads${query({ page: params.page, page_size: 25, search: params.search, status: params.status })}`,
+        `/leads${query({
+          page: params.page,
+          page_size: params.page_size ?? 25,
+          search: params.search,
+          status: params.status,
+          statuses: params.statuses,
+          min_score: params.min_score,
+          sort: params.sort,
+          list_id: params.list_id,
+        })}`,
       ),
     placeholderData: (previous) => previous,
+  })
+}
+
+/** Just the total for a segment — one row fetched, so tab counts stay cheap. */
+export function useLeadCount(statuses: string) {
+  return useQuery({
+    queryKey: ['leads', 'count', statuses],
+    queryFn: async () =>
+      (await api.get<Page<Lead>>(`/leads${query({ page: 1, page_size: 1, statuses })}`)).total,
+  })
+}
+
+/** The tabs above the leads table: one per uploaded sheet. */
+export function useLeadLists() {
+  return useQuery({
+    queryKey: ['lead-lists'],
+    queryFn: () => api.get<LeadList[]>('/leads/lists'),
+  })
+}
+
+export function useRenameLeadList() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      api.patch<LeadList>(`/leads/lists/${id}`, { name }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['lead-lists'] }),
+  })
+}
+
+export function useDeleteLeadList() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/leads/lists/${id}`),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['lead-lists'] })
+      client.invalidateQueries({ queryKey: ['leads'] })
+    },
   })
 }
 
@@ -180,11 +242,28 @@ export function useCreateCampaign() {
 export function useCampaignControl(id: string) {
   const client = useQueryClient()
   return useMutation({
+    // "Dial now" is a person asking for a call this second, so it overrides the
+    // calling window and retry backoff. Budget and concurrency caps still hold.
     mutationFn: (action: 'start' | 'pause' | 'stop' | 'dispatch') =>
-      api.post(`/campaigns/${id}/${action}`),
+      api.post<DispatchResult>(
+        `/campaigns/${id}/${action}${action === 'dispatch' ? '?force=true' : ''}`,
+      ),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ['campaigns'] })
       client.invalidateQueries({ queryKey: ['calls'] })
+    },
+  })
+}
+
+/** Upload a CSV straight onto a campaign: import and enrol in one step. */
+export function useImportCampaignLeads(id: string, token: string | null) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) =>
+      upload<CampaignImportResult>(`/campaigns/${id}/leads/import`, file, token),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['campaigns'] })
+      client.invalidateQueries({ queryKey: ['leads'] })
     },
   })
 }

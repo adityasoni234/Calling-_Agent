@@ -4,7 +4,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
-import { ApiError } from '@/lib/api'
+import { ApiError, NetworkError } from '@/lib/api'
 import { selectIsAuthenticated, useAuthStore } from '@/stores/auth'
 
 export function LoginPage() {
@@ -15,6 +15,7 @@ export function LoginPage() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [revealed, setRevealed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -30,7 +31,9 @@ export function LoginPage() {
       navigate(from && from !== '/login' ? from : '/', { replace: true })
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : 'Could not reach the server. Is the backend running?',
+        err instanceof ApiError || err instanceof NetworkError
+          ? err.message
+          : 'Something went wrong. Try again.',
       )
     } finally {
       setSubmitting(false)
@@ -50,14 +53,27 @@ export function LoginPage() {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />
-        <Field
-          label="Password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
+        {/* A browser that autofills a stale saved password hands the user a
+            rejected login with no way to see what was actually sent. Let them
+            look. */}
+        <div className="relative">
+          <Field
+            label="Password"
+            type={revealed ? 'text' : 'password'}
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <button
+            type="button"
+            onClick={() => setRevealed((shown) => !shown)}
+            aria-label={revealed ? 'Hide password' : 'Show password'}
+            className="absolute right-2.5 top-[1.9rem] rounded-lg px-2 py-1 text-2xs font-medium text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-700"
+          >
+            {revealed ? 'Hide' : 'Show'}
+          </button>
+        </div>
 
         <Button type="submit" loading={submitting} className="w-full">
           Sign in

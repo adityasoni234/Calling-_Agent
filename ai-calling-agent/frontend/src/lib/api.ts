@@ -2,6 +2,20 @@ import type { ApiErrorBody, TokenPair } from '@/types/api'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
 
+/**
+ * The request never reached the server.
+ *
+ * Worth its own type: a dead backend used to surface as whatever generic
+ * message the calling screen happened to use ("Could not draft the agent"),
+ * which sends you looking in entirely the wrong place.
+ */
+export class NetworkError extends Error {
+  constructor(message = 'Cannot reach the server. Check that the backend is running.') {
+    super(message)
+    this.name = 'NetworkError'
+  }
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
@@ -106,12 +120,18 @@ async function send(path: string, options: RequestOptions, accessToken: string |
   if (options.body !== undefined) headers['Content-Type'] = 'application/json'
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`
 
-  return fetch(`${BASE_URL}${path}`, {
-    method: options.method ?? 'GET',
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    signal: options.signal,
-  })
+  try {
+    return await fetch(`${BASE_URL}${path}`, {
+      method: options.method ?? 'GET',
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: options.signal,
+    })
+  } catch {
+    // fetch only rejects when the request never completed: DNS failure, the
+    // host being down, or CORS refusing it outright.
+    throw new NetworkError()
+  }
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {

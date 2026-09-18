@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { Alert } from '@/components/ui/Alert'
@@ -16,12 +16,16 @@ import {
   useCampaign,
   useCampaignControl,
   useCampaignLeads,
+  useImportCampaignLeads,
   useCampaigns,
   useCreateCampaign,
   useLead,
 } from '@/hooks/api'
-import { ApiError } from '@/lib/api'
+import { ApiError, NetworkError } from '@/lib/api'
+import { downloadCsv, leadTemplateCsv } from '@/lib/csv'
 import { formatCurrency, formatDateTime } from '@/lib/format'
+import { useAuthStore } from '@/stores/auth'
+import type { CampaignImportResult, DispatchResult } from '@/types/api'
 
 export function CampaignsPage() {
   const { data, isLoading } = useCampaigns()
@@ -82,11 +86,29 @@ export function CampaignsPage() {
   )
 }
 
+/** The API answers with a machine reason; a person needs the sentence. */
+function dialSummary(result: DispatchResult): string {
+  if (result.started > 0) {
+    return `Dialling ${result.started} ${result.started === 1 ? 'lead' : 'leads'} now.`
+  }
+  const reasons: Record<string, string> = {
+    nothing_due: 'Nobody is waiting to be called. Every lead on this campaign has been dialled.',
+    completed: 'This campaign is finished — every lead has been called.',
+    at_concurrency_limit: 'Already at the concurrent-call limit. These calls start as others end.',
+    campaign_budget_reached: 'The campaign budget cap is spent, so it has been paused.',
+    budget_exceeded: 'The account budget cap is spent, so the campaign has been paused.',
+    outside_calling_hours: 'Outside the calling window.',
+  }
+  const known = reasons[result.reason]
+  return known ?? `No calls started (${result.reason.replace(/_/g, ' ')}).`
+}
+
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { data: campaign, isLoading } = useCampaign(id)
   const control = useCampaignControl(id ?? '')
   const [error, setError] = useState<string | null>(null)
+  const [dialed, setDialed] = useState<DispatchResult | null>(null)
 
   if (isLoading || !campaign) {
     return <p className="py-10 text-center text-sm text-ink-500">Loading…</p>
@@ -94,10 +116,13 @@ export function CampaignDetailPage() {
 
   const act = async (action: 'start' | 'pause' | 'stop' | 'dispatch') => {
     setError(null)
+    setDialed(null)
     try {
-      await control.mutateAsync(action)
+      const result = await control.mutateAsync(action)
+      // A button that dials must say whether it dialled, and if not, why not.
+      if (action === 'dispatch') setDialed(result as DispatchResult)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Action failed')
+      setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Action failed')
     }
   }
 
@@ -120,7 +145,13 @@ export function CampaignDetailPage() {
           )}
           {campaign.status === 'running' && (
             <>
-              <Button variant="secondary" onClick={() => act('dispatch')}>Dial now</Button>
+              <Button
+                variant="secondary"
+                onClick={() => act('dispatch')}
+                loading={control.isPending}
+              >
+                Dial now
+              </Button>
               <Button variant="secondary" onClick={() => act('pause')}>Pause</Button>
             </>
           )}
@@ -131,11 +162,12 @@ export function CampaignDetailPage() {
       </header>
 
       {error && <Alert tone="error">{error}</Alert>}
+      {dialed && <Alert tone={dialed.started > 0 ? 'success' : 'warning'}>{dialSummary(dialed)}</Alert>}
       {campaign.status === 'running' && !stats.within_calling_hours && (
         <Alert tone="warning">
           Outside the configured calling window ({campaign.calling_hours_start.slice(0, 5)}–
-          {campaign.calling_hours_end.slice(0, 5)} {campaign.timezone}), so no calls are being
-          placed. This limit is enforced deliberately.
+          {campaign.calling_hours_end.slice(0, 5)} {campaign.timezone}), so the scheduler is not
+          dialling. Use <span className="font-medium">Dial now</span> to call anyway.
         </Alert>
       )}
 
@@ -200,7 +232,7 @@ function CampaignEditor({ onClose }: { onClose: () => void }) {
       })
       onClose()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not create the campaign')
+      setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Could not create the campaign')
     }
   }
 
@@ -267,7 +299,12 @@ function CampaignEditor({ onClose }: { onClose: () => void }) {
           />
         </div>
 
-        <LeadPicker selected={selected} onChange={setSelected} />
+        <div>
+          <LeadPicker selected={selected} onChange={setSelected} />
+          <p className="mt-2 text-xs text-ink-400">
+            Have a list instead? Create the campaign, then upload a CSV to it directly.
+          </p>
+        </div>
       </div>
 
       <footer className="mt-4 flex justify-end gap-2 border-t border-ink-100 pt-4">
@@ -281,32 +318,107 @@ function CampaignEditor({ onClose }: { onClose: () => void }) {
 }
 
 
+/** Counts alone leave people guessing; say what happened to their file. */
+function importSummary(result: CampaignImportResult): string {
+  if (result.attached === 0 && result.imported === 0) {
+    return result.errors.length
+      ? 'Nothing was added from that file.'
+      : 'Nobody new to add — everyone in that file is already on this campaign.'
+  }
+  const parts = [`${result.attached} on the call list`]
+  if (result.imported) parts.push(`${result.imported} new to your leads`)
+  const reused = result.attached - result.imported
+  if (reused > 0) parts.push(`${reused} already in your leads`)
+  return `Added ${parts.join(', ')}.`
+}
+
 function CampaignLeadList({ campaignId, callsMade }: { campaignId: string; callsMade: number }) {
   const [page, setPage] = useState(1)
   const { data, isLoading } = useCampaignLeads(campaignId, page)
+  const [imported, setImported] = useState<CampaignImportResult | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const token = useAuthStore((state) => state.tokens?.access_token ?? null)
+  const importLeads = useImportCampaignLeads(campaignId, token)
+
+  const pickFile = () => fileInput.current?.click()
 
   return (
     <Card
       title="Who is being called"
       description="Progress through the list, so you can see who is still waiting"
       actions={
-        <Link
-          to={`/calls?campaign=${campaignId}`}
-          className="text-xs font-medium text-brand-600 hover:text-brand-700"
-        >
-          View {callsMade} calls →
-        </Link>
+        <div className="flex items-center gap-3">
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={async (event) => {
+              const file = event.target.files?.[0]
+              if (!file) return
+              setImported(null)
+              try {
+                setImported(await importLeads.mutateAsync(file))
+              } catch (error) {
+                setImported({
+                  imported: 0,
+                  skipped: 0,
+                  attached: 0,
+                  errors: [error instanceof Error ? error.message : 'Upload failed'],
+                })
+              } finally {
+                // Let the same file be picked again after a correction.
+                event.target.value = ''
+              }
+            }}
+          />
+          <Button size="sm" variant="secondary" onClick={pickFile} loading={importLeads.isPending}>
+            Upload CSV
+          </Button>
+          <Link
+            to={`/calls?campaign=${campaignId}`}
+            className="text-xs font-medium text-brand-600 hover:text-brand-700"
+          >
+            View {callsMade} calls →
+          </Link>
+        </div>
       }
       flush
     >
+      {imported && (
+        <div className="px-5 pt-4">
+          <Alert tone={imported.errors.length ? 'warning' : 'success'}>
+            {importSummary(imported)}
+            {imported.errors.length > 0 && (
+              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">
+                {imported.errors.slice(0, 5).map((problem) => (
+                  <li key={problem}>{problem}</li>
+                ))}
+              </ul>
+            )}
+          </Alert>
+        </div>
+      )}
       {isLoading ? (
         <p className="px-5 py-8 text-center text-sm text-ink-500">Loading…</p>
       ) : !data?.items.length ? (
         <div className="px-5">
           <EmptyState
             title="No leads on this campaign"
-            hint="Add leads to it before starting, or it has nothing to dial."
+            hint="Upload a CSV of the people you want called, or add existing leads."
           />
+          <div className="flex justify-center gap-2 pb-8">
+            <Button size="sm" onClick={pickFile} loading={importLeads.isPending}>
+              Upload CSV
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => downloadCsv('leads-template.csv', leadTemplateCsv())}
+            >
+              Download template
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="px-5 pb-4">

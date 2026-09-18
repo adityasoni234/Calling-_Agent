@@ -29,6 +29,10 @@ class STTEvent:
     text: str = ""
     confidence: float = 0.0
     language: str | None = None
+    #: True only when the provider's endpointing says the speaker has finished.
+    #: A FINAL without it is a mid-sentence segment the provider chose to close,
+    #: and replying to one cuts the customer off.
+    speech_final: bool = False
 
 
 class STTSession(ABC):

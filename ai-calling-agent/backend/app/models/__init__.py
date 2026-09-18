@@ -18,6 +18,7 @@ from app.models.call import (
 from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus, CampaignStatus
 from app.models.knowledge import Document, DocumentChunk, DocumentStatus, KnowledgeBase
 from app.models.lead import InterestLevel, Lead, LeadStatus
+from app.models.lead_list import LeadList, LeadListMember, LeadListSource
 from app.models.organization import Organization
 from app.models.pricing import PricingRate
 from app.models.refresh_token import RefreshToken
@@ -43,6 +44,9 @@ __all__ = [
     "InterestLevel",
     "KnowledgeBase",
     "Lead",
+    "LeadList",
+    "LeadListMember",
+    "LeadListSource",
     "LeadStatus",
     "Organization",
     "PricingRate",

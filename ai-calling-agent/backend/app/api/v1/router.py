@@ -16,6 +16,7 @@ from app.api.v1.endpoints import (
     learning,
     media,
     messaging,
+    messaging_webhooks,
     platform,
     settings_api,
     webhooks,
@@ -38,3 +39,4 @@ api_router.include_router(learning.router)
 api_router.include_router(webhooks.router)
 api_router.include_router(media.router)
 api_router.include_router(messaging.router)
+api_router.include_router(messaging_webhooks.router)

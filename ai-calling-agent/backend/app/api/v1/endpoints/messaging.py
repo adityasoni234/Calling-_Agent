@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession, requires
 from app.api.pagination import PageParam, PageSizeParam, paginate
+from app.core.config import settings
 from app.core.errors import NotFoundError
 from app.core.permissions import Capability
 from app.models.messaging import (
@@ -40,6 +41,8 @@ from app.schemas.messaging import (
     TemplateRead,
     TemplateWrite,
 )
+from app.services.messaging.base import MessagingNotConfigured
+from app.services.messaging.twilio import get_messaging_provider
 from app.services.messaging_service import MessagingService, normalise_number
 
 router = APIRouter(prefix="/messaging", tags=["messaging"])
@@ -106,7 +109,9 @@ async def send_message(payload: MessageSend, db: DbSession, user: SendUser) -> M
     """
     service = MessagingService(db)
     template = await _template(db, user, payload.template_id) if payload.template_id else None
-    sender = payload.from_number or ""
+    provider = get_messaging_provider()
+    sender = payload.from_number or settings.twilio_caller_id or ""
+
     message = await service.prepare(
         organization_id=user.organization_id,
         channel=payload.channel,
@@ -119,6 +124,51 @@ async def send_message(payload: MessageSend, db: DbSession, user: SendUser) -> M
         lead_id=payload.lead_id,
         idempotency_key=payload.idempotency_key,
         require_consent=payload.require_consent,
+    )
+
+    # A gate already stopped it, or an idempotent replay already went out.
+    if message.status is not MessageStatus.QUEUED:
+        return MessageRead.model_validate(message)
+
+    if not provider.configured:
+        # Recorded as failed rather than left queued forever. A message stuck
+        # in "queued" looks like a delay; this says plainly that nothing was
+        # sent and why.
+        await service.record_dispatch(
+            message,
+            provider=provider.name,
+            provider_message_id=None,
+            error="No messaging provider is configured.",
+            error_code="provider_unconfigured",
+        )
+        return MessageRead.model_validate(message)
+
+    try:
+        result = await provider.send(
+            to_number=message.to_number,
+            from_number=message.from_number,
+            body=message.body,
+            channel=message.channel,
+            # Without this callback the message stays "sent" forever and we
+            # never learn whether it arrived or what it cost.
+            status_callback=f"{settings.public_base_url}/api/v1/webhooks/messaging/status",
+        )
+    except MessagingNotConfigured as exc:
+        await service.record_dispatch(
+            message,
+            provider=provider.name,
+            provider_message_id=None,
+            error=str(exc),
+            error_code="provider_unconfigured",
+        )
+        return MessageRead.model_validate(message)
+
+    await service.record_dispatch(
+        message,
+        provider=provider.name,
+        provider_message_id=result.provider_message_id,
+        error=result.error_message,
+        error_code=result.error_code,
     )
     return MessageRead.model_validate(message)
 

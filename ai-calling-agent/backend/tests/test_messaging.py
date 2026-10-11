@@ -477,7 +477,11 @@ async def test_sending_through_the_api_records_the_server_decided_price(
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["status"] == "queued"
+    # The endpoint dispatches, so a successful send lands on "sent" with the
+    # provider's id, not on "queued".
+    assert body["status"] == "sent"
+    assert body["provider_message_id"]
+    assert body["provider"] == "mock"
     assert body["to_number"] == TO
     assert body["segments"] == 1
     # Serialised as a string: a JSON number is a float and would reintroduce
@@ -616,3 +620,135 @@ async def test_the_inbox_reports_whether_a_free_form_whatsapp_reply_is_allowed(
     )
     response = await client.get("/messaging/conversations?channel=whatsapp", headers=auth_headers)
     assert response.json()["items"][0]["session_open"] is True
+
+
+# --- the Twilio adapter -----------------------------------------------
+
+
+def test_whatsapp_numbers_get_the_scheme_prefix_on_the_wire() -> None:
+    """Same endpoint as SMS; the prefix is the only thing that differs."""
+    from app.services.messaging.twilio import _plain, _wire
+
+    assert _wire(TO, Channel.WHATSAPP) == f"whatsapp:{TO}"
+    assert _wire(f"whatsapp:{TO}", Channel.WHATSAPP) == f"whatsapp:{TO}"
+    assert _wire(TO, Channel.SMS) == TO
+    assert _plain(f"whatsapp:{TO}") == TO
+
+
+def test_undelivered_is_not_collapsed_into_failed() -> None:
+    """The carrier billed us for one and not the other."""
+    from app.services.messaging.twilio import _STATUS
+
+    assert _STATUS["undelivered"] is MessageStatus.UNDELIVERED
+    assert _STATUS["failed"] is MessageStatus.FAILED
+    assert _STATUS["undelivered"] is not _STATUS["failed"]
+
+
+def test_a_delivery_receipt_is_parsed_with_its_cost() -> None:
+    from app.services.messaging.twilio import TwilioMessaging
+
+    parsed = TwilioMessaging().parse_webhook(
+        {
+            "MessageSid": "SM123",
+            "From": "+15550001111",
+            "To": TO,
+            "MessageStatus": "delivered",
+            # Twilio reports spend as a negative number.
+            "Price": "-0.0075",
+            "PriceUnit": "USD",
+        }
+    )
+    assert parsed is not None
+    assert parsed.provider_message_id == "SM123"
+    assert parsed.status is MessageStatus.DELIVERED
+    assert parsed.cost == Decimal("0.0075")
+    assert parsed.currency == "USD"
+
+
+def test_an_inbound_whatsapp_message_is_recognised_by_its_prefix() -> None:
+    from app.services.messaging.twilio import TwilioMessaging
+
+    parsed = TwilioMessaging().parse_webhook(
+        {
+            "MessageSid": "SM456",
+            "From": f"whatsapp:{TO}",
+            "To": "whatsapp:+15550001111",
+            "Body": "Yes please",
+        }
+    )
+    assert parsed is not None
+    assert parsed.channel is Channel.WHATSAPP
+    assert parsed.from_number == TO  # prefix stripped
+    assert parsed.body == "Yes please"
+    assert parsed.status is None  # no MessageStatus means it is not a receipt
+
+
+def test_an_unrecognisable_callback_is_ignored_not_fatal() -> None:
+    from app.services.messaging.twilio import TwilioMessaging
+
+    assert TwilioMessaging().parse_webhook({"Nonsense": "1"}) is None
+
+
+async def test_an_unconfigured_provider_refuses_rather_than_faking_success() -> None:
+    """A send that silently goes nowhere is found by a customer, not by us."""
+    from app.services.messaging.base import MessagingNotConfigured
+    from app.services.messaging.twilio import UnconfiguredMessaging
+
+    with pytest.raises(MessagingNotConfigured):
+        await UnconfiguredMessaging().send()
+
+
+# --- webhooks ---------------------------------------------------------
+
+
+async def test_replying_stop_opts_the_contact_out(client, auth_headers, db_session) -> None:
+    """The suppression list has to be ours, not the carrier's."""
+    org_id = (await _org(db_session)).id
+    service = MessagingService(db_session)
+    await _price(db_session, Billable.SMS_OUTBOUND)
+
+    # Establish which tenant owns the number by sending from it first.
+    sent = await service.prepare(
+        organization_id=org_id,
+        channel=Channel.SMS,
+        to_number=TO,
+        from_number=FROM,
+        body="Hello",
+    )
+    await service.record_dispatch(sent, provider="twilio", provider_message_id="SM_out")
+
+    response = await client.post(
+        "/webhooks/messaging/inbound",
+        data={"MessageSid": "SM_stop", "From": TO, "To": FROM, "Body": "STOP"},
+    )
+    assert response.status_code == 200
+    db_session.expire_all()
+    assert await service.is_suppressed(org_id, TO, Channel.SMS) is not None
+
+
+async def test_a_receipt_for_an_unknown_message_returns_200(client) -> None:
+    """Twilio retries a non-2xx, and there is nothing a retry would fix."""
+    response = await client.post(
+        "/webhooks/messaging/status",
+        data={"MessageSid": "SM_never_sent", "MessageStatus": "delivered", "To": TO},
+    )
+    assert response.status_code == 200
+
+
+async def test_an_inbound_to_an_unknown_number_creates_nothing(client, db_session) -> None:
+    """A stray message in the wrong tenant's inbox would be a privacy incident."""
+    before = await db_session.execute(select(Message))
+    count = len(list(before.scalars()))
+
+    response = await client.post(
+        "/webhooks/messaging/inbound",
+        data={
+            "MessageSid": "SM_stray",
+            "From": TO,
+            "To": "+9999999999999",
+            "Body": "Hello?",
+        },
+    )
+    assert response.status_code == 200
+    after = await db_session.execute(select(Message))
+    assert len(list(after.scalars())) == count

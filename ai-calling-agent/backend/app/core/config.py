@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     # Every one defaults to "mock": the whole pipeline runs end to end with no
     # vendor account, which is what makes it testable.
     telephony_provider: str = "mock"
+    #: "mock" records sends without a carrier account, so the whole path runs
+    #: locally and in tests. "twilio" uses real credentials.
+    messaging_provider: str = "mock"
     stt_provider: str = "mock"
     llm_provider: str = "mock"
     tts_provider: str = "mock"

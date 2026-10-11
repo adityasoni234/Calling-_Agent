@@ -29,7 +29,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: null,
     items: [
       {
-        to: "/",
+        to: "/dashboard",
         label: "Overview",
         end: true,
         hint: "Calls, spend and outcomes at a glance",

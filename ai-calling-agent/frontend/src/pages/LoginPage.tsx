@@ -19,7 +19,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  if (isAuthenticated) return <Navigate to="/" replace />;
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -28,7 +28,12 @@ export function LoginPage() {
     try {
       await login(email.trim(), password);
       const from = (location.state as { from?: string } | null)?.from;
-      navigate(from && from !== "/login" ? from : "/", { replace: true });
+      navigate(
+        from && from !== "/login" && from !== "/" ? from : "/dashboard",
+        {
+          replace: true,
+        },
+      );
     } catch (err) {
       setError(
         err instanceof ApiError || err instanceof NetworkError

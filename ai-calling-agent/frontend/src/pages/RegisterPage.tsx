@@ -23,7 +23,7 @@ export function RegisterPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  if (isAuthenticated) return <Navigate to="/" replace />;
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   const update =
     (key: keyof typeof form) => (event: { target: { value: string } }) =>
@@ -36,7 +36,7 @@ export function RegisterPage() {
     setSubmitting(true);
     try {
       await register({ ...form, email: form.email.trim() });
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setFieldErrors(err.fieldErrors);

@@ -11,7 +11,7 @@ export function NotFoundPage() {
         That route doesn't exist in this workspace.
       </p>
       <Link
-        to="/"
+        to="/dashboard"
         className="mt-6 inline-block rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
       >
         Back to overview

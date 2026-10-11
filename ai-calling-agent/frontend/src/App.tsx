@@ -13,6 +13,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { KnowledgePage } from "@/pages/KnowledgePage";
 import { LeadsPage } from "@/pages/LeadsPage";
 import { LearningPage } from "@/pages/LearningPage";
+import { LandingPage } from "@/pages/LandingPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ManualCallPage } from "@/pages/ManualCallPage";
 import { SmsPage } from "@/pages/SmsPage";
@@ -27,6 +28,9 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
+          {/* Public. The root used to be the login form, which asks a
+              stranger to authenticate before saying what the product is. */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 
@@ -37,7 +41,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<DashboardPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/learning" element={<LearningPage />} />
             <Route path="/leads" element={<LeadsPage />} />

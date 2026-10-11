@@ -42,14 +42,15 @@ const when = (value: string | null) =>
 const SETUP: Record<string, { steps: string[]; note?: string }> = {
   google: {
     steps: [
-      "console.cloud.google.com → create a project",
-      "APIs & Services → Library → enable the Gmail API",
-      "OAuth consent screen → External → add scope gmail.send only",
-      "Credentials → Create credentials → OAuth client ID → Web application",
-      "Add the redirect URI shown below, exactly",
-      "Copy the client ID and secret into the fields here",
+      "console.cloud.google.com → create or pick a project",
+      "Search 'Gmail API' → Enable (this is separate from OAuth)",
+      "Google Auth Platform → Branding → app name and support email",
+      "Audience → External, and add your own Gmail under Test users",
+      "Data access → Add scopes → .../auth/gmail.send only",
+      "Clients → Create OAuth client → Web application",
+      "Add the redirect URI shown below, exactly, then copy the ID and secret here",
     ],
-    note: "Enabling the Gmail API is the step people miss: without it a token is issued and every send returns 403, which reads like a permissions bug. The consent screen starts in Testing mode — up to 100 accounts can connect with no review.",
+    note: "Enabling the Gmail API is the step people miss: without it a token is issued and every send returns 403, which reads like a permissions bug. Audience stays in Testing — up to 100 accounts can connect with no review, which is enough for a pilot.",
   },
   microsoft: {
     steps: [

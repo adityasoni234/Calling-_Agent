@@ -478,8 +478,22 @@ _MAILBOX_STATES: dict[str, tuple[uuid.UUID, uuid.UUID | None, str, float]] = {}
 _STATE_TTL = 600.0
 
 
-def _mailbox_redirect() -> str:
-    return f"{settings.public_base_url}/api/v1/email/mailbox/callback"
+def _mailbox_redirect(request: Request) -> str:
+    """The callback URL, derived from the host the request arrived on.
+
+    OAuth requires the redirect to match what was registered with the
+    provider, exactly. Deriving it from PUBLIC_BASE_URL meant connecting
+    from localhost generated a tunnel URL that Google rightly refused,
+    while registering the tunnel is pointless because it rotates daily.
+
+    Taking it from the request makes it self-consistent: connect from
+    localhost and the callback is localhost; connect from the deployed API
+    and it is that host. Both halves of the exchange use the same function,
+    so they cannot disagree. A forged Host header cannot widen this --
+    Google only accepts a redirect it already has on file.
+    """
+    base = str(request.base_url).rstrip("/")
+    return f"{base}/api/v1/email/mailbox/callback"
 
 
 def _prune_states() -> None:
@@ -537,7 +551,7 @@ async def list_mailboxes(db: DbSession, user: CurrentUser) -> dict:
 
 
 @router.post("/mailboxes/connect", summary="Start connecting a mailbox")
-async def connect_mailbox(provider: str, db: DbSession, user: SendUser) -> dict:
+async def connect_mailbox(provider: str, request: Request, db: DbSession, user: SendUser) -> dict:
     """Return the URL to send the customer to.
 
     The state is random, single-use and names the organization, so the
@@ -556,11 +570,12 @@ async def connect_mailbox(provider: str, db: DbSession, user: SendUser) -> dict:
     _prune_states()
     state = new_state()
     _MAILBOX_STATES[state] = (user.organization_id, user.id, provider, time.time())
-    return {"authorize_url": await authorize_url(kind, state, _mailbox_redirect())}
+    return {"authorize_url": await authorize_url(kind, state, _mailbox_redirect(request))}
 
 
 @router.get("/mailbox/callback", summary="Where the provider sends them back")
 async def mailbox_callback(
+    request: Request,
     db: DbSession,
     code: Annotated[str | None, Query()] = None,
     state: Annotated[str | None, Query()] = None,
@@ -588,7 +603,7 @@ async def mailbox_callback(
     from app.services.email.mailbox import exchange_code
 
     try:
-        grant = await exchange_code(MailboxProvider(provider), code, _mailbox_redirect())
+        grant = await exchange_code(MailboxProvider(provider), code, _mailbox_redirect(request))
     except AppError as exc:
         return _oauth_page("Could not connect", str(exc))
 

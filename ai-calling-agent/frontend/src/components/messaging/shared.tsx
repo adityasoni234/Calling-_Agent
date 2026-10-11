@@ -49,7 +49,7 @@ export function Inbox({ channel }: { channel: Channel }) {
   const open = items.find((c) => c.id === openId);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[22rem_1fr]">
+    <div className="grid items-start gap-5 xl:grid-cols-[21rem_1fr]">
       <Card
         title="Threads"
         description="Newest first. Replies land in the same thread."
@@ -206,7 +206,7 @@ export function SendPanel({
   };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid items-start gap-5 lg:grid-cols-2">
       <Card
         title="Compose"
         description="One number per line, or comma separated."
@@ -492,7 +492,7 @@ export function Campaigns({ channel }: { channel: Channel }) {
   const rows = (campaigns.data ?? []).filter((c) => c.channel === channel);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
+    <div className="grid items-start gap-5 xl:grid-cols-[1fr_21rem]">
       <Card
         title="Campaigns"
         description="Each recipient goes through the same opt-out and pricing checks as a single send."

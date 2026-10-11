@@ -14,7 +14,7 @@ import { Card } from "@/components/ui/Card";
 import { Field } from "@/components/ui/Field";
 import { Select, TextArea } from "@/components/ui/Inputs";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { EmptyState, Table } from "@/components/ui/Table";
+import { EmptyState } from "@/components/ui/Table";
 import {
   useConversations,
   useCreateTemplate,
@@ -143,6 +143,7 @@ function Templates() {
   const [body, setBody] = useState("");
   const [category, setCategory] = useState("UTILITY");
   const [error, setError] = useState<string | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   const send = async (id: string) => {
     setError(null);
@@ -153,8 +154,12 @@ function Templates() {
     }
   };
 
+  const rows = templates.data ?? [];
+
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_21rem]">
+    // items-start, or the grid stretches the shorter card to match the taller
+    // one and leaves a half-screen of empty white inside it.
+    <div className="grid items-start gap-5 xl:grid-cols-[1fr_22rem]">
       <Card
         title="Your templates"
         description="Approved by Meta, not by us. Submit a draft and Meta answers within hours to a few days."
@@ -170,66 +175,76 @@ function Templates() {
         }
         flush
       >
-        <div className="px-5">
-          {error && <Alert tone="error">{error}</Alert>}
-          {!templates.data?.length ? (
-            <EmptyState
-              title="No templates yet"
-              hint="Write one on the right, then submit it for approval."
-            />
-          ) : (
-            <Table headers={["Name", "Status", "Variables", "Updated", ""]}>
-              {templates.data.map((t) => (
-                <tr key={t.id}>
-                  <td>
-                    <p className="text-ink-900">{t.name}</p>
-                    <p className="mt-0.5 max-w-sm text-2xs leading-relaxed text-ink-500">
+        {error && (
+          <div className="px-5 pt-4">
+            <Alert tone="error">{error}</Alert>
+          </div>
+        )}
+        {!rows.length ? (
+          <EmptyState
+            title="No templates yet"
+            hint="Write one on the right, then submit it for approval."
+          />
+        ) : (
+          // A list, not a table: a template is mostly body text, and a fixed
+          // column grid either truncates it or wastes the row.
+          <ul className="divide-y divide-ink-200/60">
+            {rows.map((t) => (
+              <li key={t.id} className="px-5 py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm text-ink-900">
+                        {t.name}
+                      </span>
+                      <Badge value={t.status} />
+                      {t.placeholder_count > 0 && (
+                        <span className="text-2xs text-ink-400">
+                          {t.placeholder_count} variable
+                          {t.placeholder_count === 1 ? "" : "s"}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1.5 text-sm leading-relaxed text-ink-600">
                       {t.body}
                     </p>
+                    <p className="mt-1.5 text-2xs text-ink-400">
+                      {t.status === "pending"
+                        ? "Waiting on Meta"
+                        : t.status === "draft"
+                          ? "Not submitted yet"
+                          : `Updated ${formatDateTime(t.created_at)}`}
+                    </p>
                     {t.rejection_reason && (
-                      <p className="mt-1 max-w-sm text-2xs leading-relaxed text-red-700">
+                      <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-2xs leading-relaxed text-red-800">
                         {t.rejection_reason}
                       </p>
                     )}
-                  </td>
-                  <td>
-                    <Badge value={t.status} />
-                    {t.status === "pending" && (
-                      <span className="mt-0.5 block text-2xs text-ink-400">
-                        with Meta
-                      </span>
-                    )}
-                  </td>
-                  <td className="tabular-nums">{t.placeholder_count}</td>
-                  <td className="whitespace-nowrap text-2xs text-ink-400">
-                    {formatDateTime(t.created_at)}
-                  </td>
-                  <td className="text-right">
-                    <div className="flex justify-end gap-1">
-                      {t.status !== "approved" && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={submit.isPending || t.status === "pending"}
-                          onClick={() => void send(t.id)}
-                        >
-                          {t.status === "pending" ? "Submitted" : "Submit"}
-                        </Button>
-                      )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {t.status !== "approved" && (
                       <Button
                         size="sm"
-                        variant="ghost"
-                        onClick={() => remove.mutate(t.id)}
+                        variant="secondary"
+                        disabled={submit.isPending || t.status === "pending"}
+                        onClick={() => void send(t.id)}
                       >
-                        Delete
+                        {t.status === "pending" ? "Submitted" : "Submit"}
                       </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </Table>
-          )}
-        </div>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => remove.mutate(t.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       <Card
@@ -241,7 +256,6 @@ function Templates() {
             label="Category"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            hint="Meta refuses a promotional message submitted as Utility."
           >
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
@@ -257,7 +271,7 @@ function Templates() {
           />
           <TextArea
             label="Body"
-            rows={5}
+            rows={4}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             hint="Use {{1}}, {{2}} for the parts that change."
@@ -274,22 +288,40 @@ function Templates() {
             {create.isPending ? "Saving…" : "Save draft"}
           </Button>
 
-          <div className="rounded-xl bg-ink-50 px-4 py-3 text-2xs leading-relaxed text-ink-600">
-            <p className="font-medium text-ink-800">A template that passes</p>
-            <p className="mt-1 font-mono text-ink-700">
-              Hi {"{{1}}"}, your consultation is confirmed for {"{{2}}"}. Reply
-              RESCHEDULE to change it.
-            </p>
-            <p className="mt-2.5 font-medium text-ink-800">What Meta rejects</p>
-            <ul className="mt-1 space-y-1">
-              <li>
-                Vague wording like &ldquo;we have an update for you&rdquo;
-              </li>
-              <li>A sales pitch submitted under Utility</li>
-              <li>Placeholders at the very start or end</li>
-              <li>Two placeholders next to each other</li>
-            </ul>
-          </div>
+          {/* Collapsed by default. The guidance matters, but it is reference
+              material and pushed the form itself below the fold. */}
+          <button
+            type="button"
+            onClick={() => setShowGuide((open) => !open)}
+            className="flex w-full items-center justify-between rounded-xl bg-ink-50 px-3.5 py-2.5 text-left text-2xs font-medium text-ink-700 transition-colors hover:bg-ink-100"
+          >
+            What Meta approves
+            <span aria-hidden className="text-ink-400">
+              {showGuide ? "−" : "+"}
+            </span>
+          </button>
+          {showGuide && (
+            <div className="space-y-3 rounded-xl bg-ink-50 px-3.5 py-3 text-2xs leading-relaxed text-ink-600">
+              <div>
+                <p className="font-medium text-ink-800">This passes</p>
+                <p className="mt-1 font-mono text-ink-700">
+                  Hi {"{{1}}"}, your consultation is confirmed for {"{{2}}"}.
+                  Reply RESCHEDULE to change it.
+                </p>
+              </div>
+              <div>
+                <p className="font-medium text-ink-800">These are refused</p>
+                <ul className="mt-1 space-y-1">
+                  <li>
+                    Vague wording like &ldquo;we have an update for you&rdquo;
+                  </li>
+                  <li>A sales pitch submitted under Utility</li>
+                  <li>Placeholders at the very start or end</li>
+                  <li>Two placeholders next to each other</li>
+                </ul>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
     </div>
@@ -326,7 +358,7 @@ function Setup() {
   ];
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid items-start gap-5 lg:grid-cols-2">
       <Card
         title="Setup"
         description="Everything WhatsApp needs before it can send."

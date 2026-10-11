@@ -120,7 +120,7 @@ export function BillingPage() {
         ) : !packages.data?.length ? (
           <EmptyState
             title="No packages available"
-            description="Nothing is on sale right now. Contact us and we will add credits directly."
+            hint="Nothing is on sale right now. Contact us and we will add credits directly."
           />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -181,7 +181,7 @@ export function BillingPage() {
           {!ledger.data?.items.length ? (
             <EmptyState
               title="Nothing yet"
-              description="Purchases, grants and call charges will appear here."
+              hint="Purchases, grants and call charges will appear here."
             />
           ) : (
             <>
@@ -233,7 +233,7 @@ export function BillingPage() {
           {!orders.data?.items.length ? (
             <EmptyState
               title="No payments yet"
-              description="Top up above to see receipts here."
+              hint="Top up above to see receipts here."
             />
           ) : (
             <>

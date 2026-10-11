@@ -752,6 +752,8 @@ export interface CustomerProfile {
   lifetime_purchased: number;
   lifetime_granted: number;
   lifetime_consumed: number;
+  /** Matches provider_cost_30d_usd's window, so margin is apples-to-apples. */
+  consumed_30d: number;
   paid_orders: number;
   paid_minor: number;
   refunded_minor: number;

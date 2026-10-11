@@ -123,6 +123,7 @@ export function Packages() {
     "block text-[0.65rem] font-medium uppercase tracking-[0.1em] text-slate-500";
 
   // Shown live while editing, so the operator sees the price a customer sees.
+  const currency = draft?.currency ?? "INR";
   const previewTax = draft
     ? Math.round((draft.price_minor * (draft.tax_bps ?? 0)) / 10_000)
     : 0;
@@ -219,7 +220,7 @@ export function Packages() {
             <div className="grid gap-3 sm:grid-cols-4">
               <div>
                 <label className={label} htmlFor="pkg-price">
-                  Price ({draft.currency})
+                  Price ({currency})
                 </label>
                 <input
                   id="pkg-price"
@@ -349,7 +350,7 @@ export function Packages() {
             <p className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-[0.75rem] text-slate-400">
               Customer pays{" "}
               <span className="tabular-nums text-slate-100">
-                {money(draft.price_minor + previewTax, draft.currency)}
+                {money(draft.price_minor + previewTax, currency)}
               </span>{" "}
               for{" "}
               <span className="tabular-nums text-slate-100">
@@ -357,8 +358,8 @@ export function Packages() {
                   draft.base_credits + (draft.bonus_credits ?? 0)
                 ).toLocaleString()}
               </span>{" "}
-              credits — {money(draft.price_minor, draft.currency)} +{" "}
-              {money(previewTax, draft.currency)} tax.
+              credits — {money(draft.price_minor, currency)} +{" "}
+              {money(previewTax, currency)} tax.
             </p>
 
             {error && (

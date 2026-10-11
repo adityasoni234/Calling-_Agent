@@ -20,7 +20,6 @@ export default defineConfig({
     rollupOptions: {
       input: fileURLToPath(new URL('./admin.html', import.meta.url)),
       output: {
-        vendor: undefined,
         manualChunks: { vendor: ['react', 'react-dom', 'react-router-dom'] },
       },
     },

@@ -9,7 +9,7 @@
     "dev": "vite --host 0.0.0.0",
     "lint": "eslint . --max-warnings 0",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b --force",
     "build:admin": "tsc -b && vite build --config vite.admin.config.ts",
     "build:all": "npm run build && npm run build:admin"
   },

@@ -25,6 +25,7 @@ import {
   useSetDefaultMailbox,
 } from "@/hooks/api";
 import { formatDateTime, formatUsd } from "@/lib/format";
+import { useAuthStore } from "@/stores/auth";
 
 /**
  * Bulk email.
@@ -703,6 +704,11 @@ function Blocked() {
  * when a provider suspends the mailbox for a day.
  */
 function Mailbox() {
+  // Telling an account owner to "ask your administrator" when they are the
+  // administrator is a dead end. The advice changes with who is reading it.
+  const isPlatformAdmin = useAuthStore((state) =>
+    Boolean(state.user?.is_platform_admin),
+  );
   const mailboxes = useMailboxes();
   const connect = useConnectMailbox();
   const setDefault = useSetDefaultMailbox();
@@ -813,23 +819,49 @@ function Mailbox() {
             className="w-full"
             variant="secondary"
             disabled={!data?.available.gmail || connect.isPending}
+            title={
+              data && !data.available.gmail
+                ? "No Google credentials have been added to this platform yet"
+                : undefined
+            }
             onClick={() => void start("gmail")}
           >
-            Connect Gmail
+            {data && !data.available.gmail
+              ? "Connect Gmail — not set up yet"
+              : "Connect Gmail"}
           </Button>
           <Button
             className="w-full"
             variant="secondary"
             disabled={!data?.available.outlook || connect.isPending}
+            title={
+              data && !data.available.outlook
+                ? "No Microsoft credentials have been added to this platform yet"
+                : undefined
+            }
             onClick={() => void start("outlook")}
           >
-            Connect Outlook
+            {data && !data.available.outlook
+              ? "Connect Outlook — not set up yet"
+              : "Connect Outlook"}
           </Button>
 
           {data && !data.available.gmail && !data.available.outlook && (
             <Alert tone="warning">
-              Mailbox connection is not set up on this platform yet. Ask your
-              administrator to add Google or Microsoft credentials.
+              <strong className="font-medium">
+                Greyed out because no Google or Microsoft credentials have been
+                added to this platform yet.
+              </strong>{" "}
+              It is a one-time setup done once for everybody, in the admin
+              console under{" "}
+              <span className="font-mono text-2xs">
+                Providers → Google (Gmail sending)
+              </span>
+              . That page lists where to get the keys and the exact redirect URI
+              to register.{" "}
+              {isPlatformAdmin
+                ? "You can do it yourself."
+                : "If you do not have admin access, ask whoever does."}
             </Alert>
           )}
 

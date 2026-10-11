@@ -33,6 +33,11 @@ from app.models.email import (
     EmailVerdict,
     ValidationMethod,
 )
+from app.models.email_account import (
+    EmailAccount,
+    MailboxProvider,
+    MailboxStatus,
+)
 from app.models.fx import ExchangeRate
 from app.models.integration import (
     ApiKey,
@@ -94,6 +99,9 @@ from app.models.reservation import CreditReservation, ReservationStatus
 from app.models.user import User, UserRole
 
 __all__ = [
+    "MailboxStatus",
+    "MailboxProvider",
+    "EmailAccount",
     "MetaLeadEvent",
     "MetaConnectionStatus",
     "MetaConnection",

@@ -1101,3 +1101,25 @@ export interface MetaStatus {
   connections: MetaConnectionRow[];
   required_scopes: string[];
 }
+
+export interface MailboxAccount {
+  id: string;
+  provider: string;
+  address: string;
+  display_name: string;
+  status: string;
+  status_detail: string | null;
+  is_default: boolean;
+  is_usable: boolean;
+  daily_limit: number;
+  sent_today: number;
+  remaining_today: number;
+  last_sent_at: string | null;
+  created_at: string;
+}
+
+export interface MailboxList {
+  accounts: MailboxAccount[];
+  available: { gmail: boolean; outlook: boolean };
+  limits: { gmail_personal: number; gmail_workspace: number; outlook: number };
+}

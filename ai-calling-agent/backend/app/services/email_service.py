@@ -259,7 +259,7 @@ class EmailService:
         if message.status is not EmailStatus.QUEUED:
             return message
 
-        provider = await get_email_provider()
+        provider = await get_email_provider(message.organization_id, self.db)
         try:
             result = await provider.send(
                 OutboundEmail(

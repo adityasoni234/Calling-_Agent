@@ -19,6 +19,10 @@ import {
   useSendEmail,
   useValidateAddresses,
   useValidateEmailCampaign,
+  useConnectMailbox,
+  useDisconnectMailbox,
+  useMailboxes,
+  useSetDefaultMailbox,
 } from "@/hooks/api";
 import { formatDateTime, formatUsd } from "@/lib/format";
 
@@ -32,6 +36,7 @@ import { formatDateTime, formatUsd } from "@/lib/format";
  */
 
 const TABS = [
+  { key: "mailbox", label: "Sending mailbox" },
   { key: "validate", label: "Check a list" },
   { key: "send", label: "Send one" },
   { key: "campaigns", label: "Campaigns" },
@@ -51,7 +56,7 @@ const VERDICT_HELP: Record<string, string> = {
 };
 
 export function EmailPage() {
-  const [tab, setTab] = useState<TabKey>("validate");
+  const [tab, setTab] = useState<TabKey>("mailbox");
   const readiness = useEmailReadiness();
   const blockers = readiness.data?.blockers ?? [];
 
@@ -101,6 +106,7 @@ export function EmailPage() {
         ))}
       </div>
 
+      {tab === "mailbox" && <Mailbox />}
       {tab === "validate" && <Validate />}
       {tab === "send" && <SendOne />}
       {tab === "campaigns" && <Campaigns />}
@@ -680,5 +686,177 @@ function Blocked() {
         )}
       </div>
     </Card>
+  );
+}
+
+// --- connected mailbox ------------------------------------------------
+
+/**
+ * Connecting the customer's own mailbox.
+ *
+ * Nobody types a password and nobody pastes an API key — consent happens in
+ * Google's or Microsoft's own dialog. Mail then leaves from an address the
+ * recipient recognises, at no cost to this platform, using the customer's
+ * own daily quota.
+ *
+ * That quota is the catch, and it is stated up front rather than discovered
+ * when a provider suspends the mailbox for a day.
+ */
+function Mailbox() {
+  const mailboxes = useMailboxes();
+  const connect = useConnectMailbox();
+  const setDefault = useSetDefaultMailbox();
+  const disconnect = useDisconnectMailbox();
+  const [error, setError] = useState<string | null>(null);
+
+  const data = mailboxes.data;
+  const accounts = data?.accounts ?? [];
+
+  const start = async (provider: string) => {
+    setError(null);
+    try {
+      const { authorize_url } = await connect.mutateAsync(provider);
+      // A new tab, so the customer keeps their place and the provider's
+      // dialog is not boxed into an iframe it may refuse to render in.
+      window.open(authorize_url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError((err as Error)?.message ?? "Could not start the connection");
+    }
+  };
+
+  return (
+    <div className="grid items-start gap-5 xl:grid-cols-[1fr_22rem]">
+      <Card
+        title="Sending mailbox"
+        description="Emails go out from your own account, so they arrive from an address your contacts recognise."
+        flush
+      >
+        <div className="px-5">
+          {error && <Alert tone="error">{error}</Alert>}
+          {!accounts.length ? (
+            <EmptyState
+              title="No mailbox connected"
+              hint="Connect Gmail or Outlook on the right. Nothing can be emailed until you do."
+            />
+          ) : (
+            <ul className="divide-y divide-ink-200/60">
+              {accounts.map((account) => (
+                <li key={account.id} className="py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-sm text-ink-900">
+                          {account.address}
+                        </span>
+                        <Badge value={account.provider} />
+                        {account.is_default && <Badge value="default" />}
+                        {!account.is_usable && <Badge value={account.status} />}
+                      </div>
+                      <p className="mt-1.5 text-xs text-ink-500">
+                        {account.sent_today} of {account.daily_limit} sent today
+                        {" · "}
+                        {account.remaining_today} left
+                      </p>
+                      {account.status_detail && (
+                        <p className="mt-1.5 text-2xs leading-relaxed text-amber-700">
+                          {account.status_detail}
+                        </p>
+                      )}
+                      <div className="mt-2.5 h-1.5 w-48 overflow-hidden rounded-full bg-ink-200">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            account.remaining_today === 0
+                              ? "bg-red-600"
+                              : "bg-brand-700"
+                          }`}
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (account.sent_today / account.daily_limit) * 100,
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-1.5">
+                      {!account.is_default && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setDefault.mutate(account.id)}
+                        >
+                          Use this
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => disconnect.mutate(account.id)}
+                      >
+                        Disconnect
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Card>
+
+      <Card
+        title="Connect an account"
+        description="You approve it on their site. We never see your password."
+      >
+        <div className="space-y-4">
+          <Button
+            className="w-full"
+            variant="secondary"
+            disabled={!data?.available.gmail || connect.isPending}
+            onClick={() => void start("gmail")}
+          >
+            Connect Gmail
+          </Button>
+          <Button
+            className="w-full"
+            variant="secondary"
+            disabled={!data?.available.outlook || connect.isPending}
+            onClick={() => void start("outlook")}
+          >
+            Connect Outlook
+          </Button>
+
+          {data && !data.available.gmail && !data.available.outlook && (
+            <Alert tone="warning">
+              Mailbox connection is not set up on this platform yet. Ask your
+              administrator to add Google or Microsoft credentials.
+            </Alert>
+          )}
+
+          <div className="rounded-xl bg-ink-50 px-3.5 py-3 text-2xs leading-relaxed text-ink-600">
+            <p className="font-medium text-ink-800">Daily limits</p>
+            <ul className="mt-1.5 space-y-1">
+              <li>
+                Personal Gmail — {data?.limits.gmail_personal ?? 500} a day
+              </li>
+              <li>
+                Google Workspace — {data?.limits.gmail_workspace ?? 2000} a day
+              </li>
+              <li>Outlook — {data?.limits.outlook ?? 300} a day</li>
+            </ul>
+            <p className="mt-2.5">
+              These are your provider&rsquo;s limits, not ours. Going over
+              suspends sending from that mailbox for 24 hours, so we stop before
+              you reach it.
+            </p>
+          </div>
+
+          <p className="text-2xs leading-relaxed text-ink-400">
+            We ask only for permission to send. The connection cannot read your
+            inbox, and disconnecting deletes it entirely.
+          </p>
+        </div>
+      </Card>
+    </div>
   );
 }

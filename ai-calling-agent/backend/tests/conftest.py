@@ -22,7 +22,7 @@ os.environ["LOG_LEVEL"] = "WARNING"
 os.environ["ALLOW_REGISTRATION"] = "true"
 os.environ["UPLOAD_DIR"] = str(_TMP_DIR / "uploads")
 # Every provider defaults to its mock, so the suite needs no network.
-for _provider in ("TELEPHONY", "STT", "LLM", "TTS", "EMBEDDING"):
+for _provider in ("TELEPHONY", "STT", "LLM", "TTS", "EMBEDDING", "MESSAGING", "EMAIL"):
     os.environ[f"{_provider}_PROVIDER"] = "mock"
 os.environ["EMBEDDING_DIM"] = "256"
 

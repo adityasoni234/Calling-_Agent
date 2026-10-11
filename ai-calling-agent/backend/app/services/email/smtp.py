@@ -13,10 +13,14 @@ to invent one.
 
 from __future__ import annotations
 
+import uuid
 from email.message import EmailMessage as MimeMessage
 from email.utils import formataddr, make_msgid
 
 import aiosmtplib
+import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -159,8 +163,6 @@ class PostmarkEmail(EmailProvider):
         return bool(self.token)
 
     async def send(self, message: OutboundEmail) -> EmailDispatched:
-        import httpx
-
         if not self.configured:
             raise EmailNotConfigured("No Postmark server token is configured.")
 
@@ -257,8 +259,15 @@ class UnconfiguredEmail(EmailProvider):
         return None
 
 
-async def get_email_provider() -> EmailProvider:
-    """The configured provider, or one that refuses honestly.
+async def get_email_provider(
+    organization_id: uuid.UUID | None = None, db: AsyncSession | None = None
+) -> EmailProvider:
+    """The provider this send should go through.
+
+    Customer-owned mailboxes come first: when an organization has connected
+    their own Gmail or Outlook, their mail leaves from their address at
+    their cost. The platform-wide options stay for a deployment that would
+    rather carry sending centrally.
 
     Selection is explicit rather than "whichever has keys", so a developer
     with real credentials in their environment cannot start mailing real
@@ -269,6 +278,32 @@ async def get_email_provider() -> EmailProvider:
         from app.services.email.mock import MockEmail
 
         return MockEmail()
+
+    if choice == "mailbox":
+        if organization_id is None or db is None:
+            return UnconfiguredEmail()
+        from app.models.email_account import EmailAccount, MailboxStatus
+        from app.services.email.mailbox import MailboxEmail, refresh_access_token
+
+        rows = await db.execute(
+            select(EmailAccount).where(
+                EmailAccount.organization_id == organization_id,
+                EmailAccount.status == MailboxStatus.CONNECTED,
+            )
+        )
+        accounts = sorted(rows.scalars(), key=lambda a: not a.is_default)
+        if not accounts:
+            return UnconfiguredEmail()
+
+        account = accounts[0]
+        try:
+            # Access tokens last an hour, so almost every send refreshes.
+            token = await refresh_access_token(account)
+        except EmailNotConfigured:
+            await db.commit()  # persist the expired status
+            return UnconfiguredEmail()
+        await db.commit()
+        return MailboxEmail(account, token)
 
     from app.services.credentials import resolve
 

@@ -15,6 +15,7 @@ import type {
   EmailReadiness,
   EmailSuppressionRow,
   MessagingReadiness,
+  MailboxList,
   MetaStatus,
   ValidationSummary,
   SendEstimate,
@@ -1136,3 +1137,39 @@ export function useMetaDisconnect() {
 }
 
 export type { AddressVerdict };
+
+export function useMailboxes() {
+  return useQuery({
+    queryKey: ["mailboxes"],
+    queryFn: () => api.get<MailboxList>("/email/mailboxes"),
+  });
+}
+
+export function useConnectMailbox() {
+  return useMutation({
+    mutationFn: (provider: string) =>
+      api.post<{ authorize_url: string }>(
+        `/email/mailboxes/connect?provider=${provider}`,
+        {},
+      ),
+  });
+}
+
+export function useSetDefaultMailbox() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/email/mailboxes/${id}/default`, {}),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["mailboxes"] }),
+  });
+}
+
+export function useDisconnectMailbox() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/email/mailboxes/${id}`),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["mailboxes"] });
+      client.invalidateQueries({ queryKey: ["email-readiness"] });
+    },
+  });
+}

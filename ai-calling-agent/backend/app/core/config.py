@@ -70,8 +70,20 @@ class Settings(BaseSettings):
     #: "mock" records sends without a carrier account, so the whole path runs
     #: locally and in tests. "twilio" uses real credentials.
     messaging_provider: str = "mock"
-    #: "mock", "smtp" (works with SES, Mailgun, anything) or "postmark".
-    email_provider: str = "mock"
+    #: "mailbox" (each customer connects their own Gmail or Outlook, the
+    #: default), "mock", "smtp" or "postmark". Mailbox costs the platform
+    #: nothing and sends from an address the recipient recognises.
+    email_provider: str = "mailbox"
+
+    # --- customer mailbox OAuth -----------------------------------------
+    #: From console.cloud.google.com. The gmail.send scope needs Google
+    #: verification before more than 100 users can connect.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    #: From the Azure portal. Mail.Send needs no admin consent for personal
+    #: accounts; a Workspace-equivalent tenant may require it.
+    microsoft_client_id: str = ""
+    microsoft_client_secret: str = ""
 
     # --- Meta lead ads --------------------------------------------------
     #: From developers.facebook.com. The secret also signs webhooks, so a

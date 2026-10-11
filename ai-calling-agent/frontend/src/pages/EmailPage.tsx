@@ -241,6 +241,7 @@ function SendOne() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [from, setFrom] = useState("");
+  const [allowRisky, setAllowRisky] = useState(false);
   const send = useSendEmail();
   const sent = send.data;
 
@@ -274,6 +275,23 @@ function SendOne() {
             value={body}
             onChange={(e) => setBody(e.target.value)}
           />
+          {/* An address can be flagged for a reason the sender disagrees
+              with -- a shared sales@ inbox they genuinely want to reach. The
+              block stays the default; this makes overriding it a decision
+              rather than a dead end. */}
+          <label className="flex items-start gap-2.5 text-xs leading-relaxed text-ink-600">
+            <input
+              type="checkbox"
+              checked={allowRisky}
+              onChange={(e) => setAllowRisky(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              Send even if the address is flagged risky — a shared inbox like
+              sales@ or info@, or a disposable address. Addresses that bounced
+              or unsubscribed are never sent either way.
+            </span>
+          </label>
           <Button
             disabled={!to || !subject || !body || send.isPending}
             onClick={() =>
@@ -282,6 +300,7 @@ function SendOne() {
                 subject,
                 text_body: body,
                 from_address: from || undefined,
+                allow_risky: allowRisky,
               })
             }
           >
@@ -317,7 +336,15 @@ function SendOne() {
               </dd>
             </div>
             {sent.error_message && (
-              <Alert tone="warning">{sent.error_message}</Alert>
+              <Alert tone="warning">
+                {sent.error_message}
+                {sent.verdict_at_send === "risky" && (
+                  <span className="mt-1.5 block">
+                    Tick &ldquo;send even if flagged risky&rdquo; to send it
+                    anyway.
+                  </span>
+                )}
+              </Alert>
             )}
           </dl>
         )}

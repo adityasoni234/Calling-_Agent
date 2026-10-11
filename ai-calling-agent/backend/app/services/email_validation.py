@@ -85,6 +85,13 @@ ROLE_ACCOUNTS = frozenset(
     }
 )
 
+#: Flags that actually justify withholding a send. A free-mail domain does
+#: not: Gmail and Yahoo are where most consumers keep their only address,
+#: and treating them as risky blocks the majority of a normal B2C list.
+#: They are still flagged, because knowing a list is 90% Gmail is useful --
+#: it just is not grounds for refusing to send.
+BLOCKING_FLAGS = frozenset({"role_account", "disposable"})
+
 #: Throwaway providers. Someone using one did not intend to be reachable.
 DISPOSABLE_DOMAINS = frozenset(
     {
@@ -326,14 +333,14 @@ class EmailValidator:
             # A role account or disposable domain is known from the address
             # itself; it does not become less risky because DNS was skipped.
             # Reachability is what stays unknown, and the confidence says so.
-            if flags:
+            if blocking := [f for f in flags if f in BLOCKING_FLAGS]:
                 return Validation(
                     address,
                     EmailVerdict.RISKY,
                     ValidationMethod.SYNTAX,
                     50,
                     "Risk flagged from the address; domain not checked",
-                    flags,
+                    blocking,
                 )
             return Validation(
                 address,
@@ -359,13 +366,13 @@ class EmailValidator:
             return Validation(
                 address, EmailVerdict.RISKY, ValidationMethod.DNS_MX, 70, failed.reason, flags
             )
-        if flags:
+        if blocking := [f for f in flags if f in BLOCKING_FLAGS]:
             return Validation(
                 address,
                 EmailVerdict.RISKY,
                 ValidationMethod.DNS_MX,
                 70,
-                "Reachable, but " + ", ".join(f.replace("_", " ") for f in flags),
+                "Reachable, but " + ", ".join(f.replace("_", " ") for f in blocking),
                 flags,
             )
 

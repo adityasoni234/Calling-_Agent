@@ -293,3 +293,43 @@ async def test_one_tenants_suppression_does_not_block_another(db_session, auth_h
     theirs = await validator.validate_one(other.id, "shared@example.com", check_dns=False)
     assert mine.verdict is EmailVerdict.SUPPRESSED
     assert theirs.verdict is not EmailVerdict.SUPPRESSED
+
+
+# --- free-mail is ordinary, not risky ---------------------------------
+
+
+async def test_a_gmail_address_is_not_treated_as_risky(db_session, auth_headers) -> None:
+    """The majority of real consumer leads are on free mail.
+
+    Flagging Gmail as risky and withholding it by default blocked most of a
+    normal B2C list, which made the feature unusable for the market it was
+    built for.
+    """
+    org = await _org(db_session)
+    validator = EmailValidator(db_session)
+    validator._domains["gmail.com"] = (True, None)
+
+    result = await validator.validate_one(org.id, "someone@gmail.com")
+    assert result.verdict is EmailVerdict.VALID
+    # Still recorded, because "this list is 90% Gmail" is worth knowing.
+    assert "free_provider" in result.flags
+
+
+async def test_role_accounts_and_disposables_still_hold_a_send(db_session, auth_headers) -> None:
+    org = await _org(db_session)
+    validator = EmailValidator(db_session)
+    validator._domains["acme.com"] = (True, None)
+    validator._domains["mailinator.com"] = (True, None)
+
+    role = await validator.validate_one(org.id, "support@acme.com")
+    throwaway = await validator.validate_one(org.id, "x@mailinator.com")
+    assert role.verdict is EmailVerdict.RISKY
+    assert throwaway.verdict is EmailVerdict.RISKY
+
+
+async def test_free_mail_passes_even_without_a_dns_check(db_session, auth_headers) -> None:
+    org = await _org(db_session)
+    result = await EmailValidator(db_session).validate_one(
+        org.id, "someone@gmail.com", check_dns=False
+    )
+    assert result.verdict is not EmailVerdict.RISKY

@@ -291,3 +291,200 @@ async def test_risky_recipients_only_count_when_the_campaign_allows_them(
         await db_session.commit()
         plan = await service.plan(campaign, ["support@example.com"], check_dns=False)
         assert plan.eligible == (1 if include else 0)
+
+
+# --- the API ----------------------------------------------------------
+
+
+async def test_the_email_api_is_closed_to_anonymous_callers(client) -> None:
+    assert (
+        await client.post("/email/validate", json={"addresses": ["a@b.com"]})
+    ).status_code == 401
+    assert (await client.get("/email/campaigns")).status_code == 401
+
+
+async def test_validation_through_the_api_classifies_every_address(
+    client, auth_headers, db_session
+) -> None:
+    response = await client.post(
+        "/email/validate",
+        json={
+            "addresses": ["good@example.com", "rubbish", "GOOD@example.com"],
+            "check_dns": False,
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["duplicates_removed"] == 1
+    assert body["invalid"] == 1
+    assert len(body["results"]) == 2
+    # Every verdict names the method that produced it, so a claim can be
+    # held to how it was reached.
+    assert all(r["method"] for r in body["results"])
+    assert all(r["confidence"] < 100 for r in body["results"])
+
+
+async def test_sending_through_the_api_records_the_server_decided_price(
+    client, auth_headers, db_session
+) -> None:
+    await _price(db_session, rate="0.0008")
+    response = await client.post(
+        "/email/messages",
+        json={
+            "to_address": "someone@example.com",
+            "subject": SUBJECT,
+            "text_body": BODY,
+            "from_address": "hello@stockvala.com",
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["customer_charge_usd"] == "0.000800"
+    assert isinstance(body["customer_charge_usd"], str)
+    assert body["verdict_at_send"]
+
+
+async def test_a_blocked_send_is_a_201_with_an_explanation(
+    client, auth_headers, db_session
+) -> None:
+    await _price(db_session)
+    await client.post(
+        "/email/suppressions",
+        json={"address": "blocked@example.com", "reason": "manual"},
+        headers=auth_headers,
+    )
+    response = await client.post(
+        "/email/messages",
+        json={
+            "to_address": "blocked@example.com",
+            "subject": SUBJECT,
+            "text_body": BODY,
+            "from_address": "hello@stockvala.com",
+        },
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    assert response.json()["status"] == "blocked"
+
+
+async def test_a_hard_bounce_cannot_be_unsuppressed(client, auth_headers, db_session) -> None:
+    """Mailing an address that bounced is how a sending domain gets blocked."""
+    org = await _org(db_session)
+    suppression = await EmailService(db_session).suppress(
+        org.id, "bounced@example.com", reason=EmailSuppressionReason.HARD_BOUNCE
+    )
+    response = await client.delete(f"/email/suppressions/{suppression.id}", headers=auth_headers)
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "suppression_permanent"
+
+
+async def test_a_manual_block_can_be_removed(client, auth_headers, db_session) -> None:
+    created = await client.post(
+        "/email/suppressions",
+        json={"address": "oops@example.com", "reason": "manual"},
+        headers=auth_headers,
+    )
+    response = await client.delete(
+        f"/email/suppressions/{created.json()['id']}", headers=auth_headers
+    )
+    assert response.status_code == 200
+
+
+async def test_a_campaign_cannot_launch_without_a_consent_confirmation(
+    client, auth_headers, db_session
+) -> None:
+    """Someone has to put their name to having permission to mail the list."""
+    await _price(db_session)
+    created = await client.post(
+        "/email/campaigns",
+        json={
+            "name": "October",
+            "subject": SUBJECT,
+            "text_body": BODY,
+            "from_address": "hello@stockvala.com",
+        },
+        headers=auth_headers,
+    )
+    campaign_id = created.json()["id"]
+    response = await client.post(f"/email/campaigns/{campaign_id}/launch", headers=auth_headers)
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "consent_required"
+
+
+async def test_a_campaign_cannot_be_approved_before_it_is_validated(
+    client, auth_headers, db_session
+) -> None:
+    created = await client.post(
+        "/email/campaigns",
+        json={
+            "name": "Unvalidated",
+            "subject": SUBJECT,
+            "text_body": BODY,
+            "from_address": "hello@stockvala.com",
+        },
+        headers=auth_headers,
+    )
+    response = await client.post(
+        f"/email/campaigns/{created.json()['id']}/approve", headers=auth_headers
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "not_validated"
+
+
+async def test_the_unsubscribe_page_always_answers(client, auth_headers, db_session) -> None:
+    """A link that errors makes the recipient press spam instead."""
+    response = await client.get("/email/unsubscribe/not-a-real-token")
+    assert response.status_code == 200
+    assert "no longer valid" in response.text
+
+
+async def test_unsubscribing_blocks_future_sends(client, auth_headers, db_session) -> None:
+    org = await _org(db_session)
+    await _price(db_session)
+    message = await _send(EmailService(db_session), org.id, "bye@example.com")
+
+    page = await client.get(f"/email/unsubscribe/{message.unsubscribe_token}")
+    assert page.status_code == 200
+    assert "will not receive" in page.text
+
+    again = await client.post(
+        "/email/messages",
+        json={
+            "to_address": "bye@example.com",
+            "subject": SUBJECT,
+            "text_body": BODY,
+            "from_address": "hello@stockvala.com",
+        },
+        headers=auth_headers,
+    )
+    assert again.json()["status"] == "blocked"
+
+
+async def test_readiness_reports_what_is_missing(client, auth_headers, db_session) -> None:
+    response = await client.get("/email/readiness", headers=auth_headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert "ready" in body and "blockers" in body
+    assert body["unpriced"] is True  # no email rule seeded in this test db
+
+
+async def test_one_tenant_cannot_see_anothers_email(client, auth_headers, db_session) -> None:
+    await _price(db_session)
+    await client.post(
+        "/email/messages",
+        json={
+            "to_address": "private@example.com",
+            "subject": "Confidential",
+            "text_body": BODY,
+            "from_address": "hello@stockvala.com",
+        },
+        headers=auth_headers,
+    )
+    rival = await client.post(
+        "/auth/register",
+        json={**REGISTRATION, "email": "rival3@example.com", "organization_name": "R3"},
+    )
+    theirs = {"Authorization": f"Bearer {rival.json()['tokens']['access_token']}"}
+    assert (await client.get("/email/messages", headers=theirs)).json()["total"] == 0

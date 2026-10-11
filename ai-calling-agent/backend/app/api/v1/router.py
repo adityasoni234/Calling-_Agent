@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     billing,
     calls,
     campaigns,
+    email,
     health,
     integrations,
     knowledge,
@@ -30,6 +31,7 @@ api_router.include_router(agents.router)
 api_router.include_router(leads.router)
 api_router.include_router(campaigns.router)
 api_router.include_router(calls.router)
+api_router.include_router(email.router)
 api_router.include_router(knowledge.router)
 api_router.include_router(analytics.router)
 api_router.include_router(platform.router)

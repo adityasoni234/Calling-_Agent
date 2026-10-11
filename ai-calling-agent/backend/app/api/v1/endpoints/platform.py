@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select
@@ -19,6 +20,7 @@ from app.core.errors import AppError, NotFoundError, ValidationFailedError
 from app.models.agent import Agent
 from app.models.billing import CreditEntry, CreditEntryKind, PlatformEvent
 from app.models.call import Call, CallStatus
+from app.models.messaging import Message
 from app.models.organization import Organization
 from app.models.package import CreditPackage, Order, OrderStatus
 from app.models.price_book import PriceBook, PriceBookStatus, PriceRule
@@ -1090,3 +1092,79 @@ async def publish_book(
         detail=payload.override_reason or "within cost",
     )
     return await _book_with_rules(db, book)
+
+
+# --- messaging across every customer ----------------------------------
+
+
+@router.get("/messages", summary="Every message on the platform")
+async def platform_messages(
+    db: DbSession,
+    admin: PlatformAdmin,
+    limit: int = 100,
+    channel: str | None = None,
+    message_status: Annotated[str | None, Query(alias="status")] = None,
+) -> dict:
+    """Cross-tenant message history, with the organization on every row.
+
+    Returns a summary alongside the rows so the page does not have to add up
+    a truncated list and report a total that is wrong by however many rows
+    the limit cut off.
+    """
+    since = _since()
+    query = select(Message, Organization.name).join(
+        Organization, Organization.id == Message.organization_id
+    )
+    if channel:
+        query = query.where(Message.channel == channel)
+    if message_status:
+        query = query.where(Message.status == message_status)
+
+    rows = await db.execute(query.order_by(Message.created_at.desc()).limit(limit))
+    items = [
+        {
+            "id": str(message.id),
+            "organization": org_name,
+            "channel": str(message.channel),
+            "direction": str(message.direction),
+            "status": str(message.status),
+            "to_number": message.to_number,
+            "body": (message.body or "")[:160],
+            "segments": message.segments,
+            "customer_charge_usd": str(message.customer_charge_usd or 0),
+            "provider_cost_usd": str(message.provider_cost_usd or 0),
+            "cost_incomplete": message.cost_incomplete,
+            "error_message": message.error_message,
+            "created_at": message.created_at.isoformat(),
+        }
+        for message, org_name in rows.all()
+    ]
+
+    totals = await db.execute(
+        select(
+            func.count(),
+            func.coalesce(func.sum(Message.customer_charge_usd), 0),
+            func.coalesce(func.sum(Message.provider_cost_usd), 0),
+        ).where(Message.created_at >= since)
+    )
+    count, charged, cost = totals.one()
+
+    by_status = await db.execute(
+        select(Message.status, func.count())
+        .where(Message.created_at >= since)
+        .group_by(Message.status)
+    )
+    statuses = {str(s): int(c) for s, c in by_status.all()}
+    delivered = statuses.get("delivered", 0) + statuses.get("read", 0)
+    attempted = sum(v for k, v in statuses.items() if k != "suppressed")
+
+    return {
+        "items": items,
+        "messages_30d": int(count or 0),
+        "charged_30d_usd": str(charged or 0),
+        "provider_cost_30d_usd": str(cost or 0),
+        "by_status": statuses,
+        # Of what we actually attempted: counting suppressed messages as
+        # failures would make a healthy opt-out list look like a broken sender.
+        "delivery_rate": round(delivered / attempted * 100, 1) if attempted else None,
+    }

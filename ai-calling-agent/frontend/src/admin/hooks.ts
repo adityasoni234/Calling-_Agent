@@ -274,3 +274,46 @@ export function usePublishBook() {
       client.invalidateQueries({ queryKey: ["platform", "price-books"] }),
   });
 }
+
+// --- messaging across every customer ----------------------------------
+
+export interface PlatformMessage {
+  id: string;
+  organization: string;
+  channel: string;
+  direction: string;
+  status: string;
+  to_number: string;
+  body: string;
+  segments: number;
+  customer_charge_usd: string;
+  provider_cost_usd: string;
+  cost_incomplete: boolean;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface PlatformMessages {
+  items: PlatformMessage[];
+  messages_30d: number;
+  charged_30d_usd: string;
+  provider_cost_30d_usd: string;
+  by_status: Record<string, number>;
+  /** Of attempted sends. Suppressed ones are excluded, not counted as failures. */
+  delivery_rate: number | null;
+}
+
+export function usePlatformMessages(channel?: string, status?: string) {
+  const params = new URLSearchParams();
+  if (channel) params.set("channel", channel);
+  if (status) params.set("status", status);
+  const query = params.toString();
+  return useQuery({
+    queryKey: ["platform", "messages", channel ?? "all", status ?? "all"],
+    queryFn: () =>
+      api.get<PlatformMessages>(
+        `/platform/messages${query ? `?${query}` : ""}`,
+      ),
+    retry: false,
+  });
+}

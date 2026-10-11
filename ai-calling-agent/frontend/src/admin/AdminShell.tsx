@@ -18,6 +18,11 @@ const SECTIONS = [
     icon: "M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10",
   },
   {
+    to: "/messages",
+    label: "Messages",
+    icon: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z",
+  },
+  {
     to: "/pricing",
     label: "Pricing",
     icon: "M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6",

@@ -6,6 +6,7 @@ import { AdminShell } from "@/admin/AdminShell";
 import { Activity } from "@/admin/pages/Activity";
 import { CustomerProfile } from "@/admin/pages/CustomerProfile";
 import { Customers } from "@/admin/pages/Customers";
+import { Messages } from "@/admin/pages/Messages";
 import { Orders } from "@/admin/pages/Orders";
 import { Packages } from "@/admin/pages/Packages";
 import { Pricing } from "@/admin/pages/Pricing";
@@ -39,6 +40,7 @@ export default function AdminApp() {
             <Route path="/customers/:id" element={<CustomerProfile />} />
             <Route path="/packages" element={<Packages />} />
             <Route path="/orders" element={<Orders />} />
+            <Route path="/messages" element={<Messages />} />
             <Route path="/providers" element={<Providers />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/users" element={<Users />} />

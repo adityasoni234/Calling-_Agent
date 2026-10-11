@@ -26,11 +26,21 @@ from app.models.reservation import CreditReservation, ReservationStatus
 
 log = get_logger(__name__)
 
-#: One credit == one US cent of list price.
-CREDITS_PER_USD = 100.0
+#: One credit == 10 paise (Rs0.10) of list price.
+#:
+#: Credits used to be defined as US cents while packages were priced in rupees,
+#: with nothing converting between them. Rs999 bought 11,000 credits, which at
+#: one US cent each was Rs9,680 of value -- every minute sold at a loss. The
+#: unit is now the currency we actually invoice in, and `usd_inr_rate` does the
+#: conversion from provider invoices in one documented place.
+#:
+#: Rs0.10 rather than Rs1 keeps per-call charges as whole-ish numbers instead of
+#: two decimal places, and keeps the existing package sizes (Rs999 -> ~10,000
+#: credits) intact.
+CREDITS_PER_INR = 10.0
 #: Charged even for a call that connects and ends immediately: the carrier bills
-#: us for the attempt, so a free zero-second call would be a loss.
-MINIMUM_CALL_CREDITS = 1.0
+#: us for the whole first minute, so a free zero-second call is a real loss.
+MINIMUM_CALL_CREDITS = 10.0
 #: What we hold before dialling, as minutes of a typical call. Generous on
 #: purpose: a hold that runs out mid-conversation is worse than one that ties
 #: up a few credits for ninety seconds.
@@ -81,12 +91,23 @@ class BillingService:
     def credits_for(self, cost_usd: float) -> float:
         """What we charge for a call that cost us `cost_usd`.
 
-        A markup on provider cost rather than a per-minute price: telephony to
-        the UK costs six times India, and a flat per-minute price would either
-        lose money on one or be uncompetitive on the other.
+        Cost-plus, not a flat per-minute price: telephony to the UK costs six
+        times India, and one flat price would either lose money on one or be
+        uncompetitive on the other. Because the markup rides on measured cost,
+        the margin holds by construction -- switching to a cheaper carrier
+        lowers the customer's price and leaves the percentage untouched.
+
+        Provider costs arrive in USD and we sell in INR, so the conversion
+        happens here, once.
         """
-        marked_up = cost_usd * settings.credit_markup_multiplier
-        return max(MINIMUM_CALL_CREDITS, round(marked_up * CREDITS_PER_USD, 2))
+        cost_inr = cost_usd * settings.usd_inr_rate
+        marked_up = cost_inr * settings.credit_markup_multiplier
+        return max(MINIMUM_CALL_CREDITS, round(marked_up * CREDITS_PER_INR, 2))
+
+    @staticmethod
+    def rupees(credits: float) -> float:
+        """List-price value of some credits, in rupees."""
+        return round(credits / CREDITS_PER_INR, 2)
 
     async def held_credits(self, organization_id: uuid.UUID) -> float:
         """Credits set aside for calls currently in flight."""

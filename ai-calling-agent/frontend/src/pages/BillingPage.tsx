@@ -22,8 +22,9 @@ import type { Checkout, CreditPackage } from "@/types/api";
 /**
  * Credits and payments.
  *
- * One credit is one US cent of list price, which is the only honest way to
- * bill calls that cost us different amounts per country. The page leads with
+ * One credit is 10 paise of list price. Calls are billed cost-plus rather
+ * than at a flat per-minute rate, because a call to the UK costs six times
+ * one to India and a single flat price cannot serve both honestly. The page leads with
  * what is spendable rather than the raw balance: money held against calls
  * already dialling cannot be spent twice, and a customer who sees only the
  * total will ask why a call was refused.
@@ -65,7 +66,7 @@ export function BillingPage() {
     <div className="space-y-8">
       <PageHeader
         title="Billing & Credits"
-        description="One credit is one US cent of list price. Calls are charged per second, and only for what connected."
+        description="Credits are charged per second of connected call time — nothing for a number that never answered."
       />
 
       {balance.data?.is_suspended && (

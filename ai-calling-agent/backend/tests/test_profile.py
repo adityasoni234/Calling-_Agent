@@ -13,12 +13,12 @@ from datetime import UTC, datetime, timedelta
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.models.billing import CreditEntry, CreditEntryKind
 from app.models.call import Call, CallSource, CallStatus
 from app.models.organization import Organization
 from app.models.package import CreditPackage, OrderStatus
 from app.models.user import User
-from app.core.config import settings
 from app.services.order_service import OrderService
 from tests.conftest import REGISTRATION
 

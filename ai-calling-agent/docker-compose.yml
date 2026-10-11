@@ -52,6 +52,7 @@ services:
       # Bind mount + --reload for local development. Drop both in production.
       - ./backend/app:/app/app
       - ./backend/alembic:/app/alembic
+      - ./backend/scripts:/app/scripts
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
       postgres:

@@ -161,7 +161,7 @@ export function Packages() {
       {draft && (
         <Panel
           title={editing ? `Edit ${editing.name}` : "New package"}
-          description="Price in rupees, credits as whole numbers. One credit is one US cent of list price."
+          description="Price in rupees, credits as whole numbers. One credit is 10 paise of list price."
         >
           <div className="space-y-4 px-4 py-4">
             <div className="grid gap-3 sm:grid-cols-2">

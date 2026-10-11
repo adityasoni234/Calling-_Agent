@@ -110,9 +110,19 @@ class Settings(BaseSettings):
     #: A multiplier rather than a fixed per-minute price because telephony to
     #: the UK costs six times India -- one flat price would lose money on one
     #: region or be uncompetitive in the other.
+    #: Gross margin dial. 3.0 means a call that costs us Rs10 is sold for Rs30.
+    #: Cost-plus rather than a flat per-minute price, because telephony to the
+    #: UK costs six times India and one flat price cannot serve both.
     credit_markup_multiplier: float = 3.0
+    #: Provider invoices are in USD; we sell in INR. Without this the two were
+    #: never reconciled and credits were sold at a tenth of their cost basis.
+    #: Review it when the rate moves more than a few percent -- it is the one
+    #: number that silently changes every margin on the platform.
+    usd_inr_rate: float = 88.0
     #: Credits given to a brand-new organization so it can place a test call.
-    trial_credits: float = 500.0
+    #: About ten minutes of agent calling. Credits are 10 per rupee, so this
+    #: is Rs300 of list price -- enough to judge the product before paying.
+    trial_credits: float = 3000.0
 
     # --- payments ------------------------------------------------------
     #: Which provider to use. Anything unset leaves payments refusing clearly

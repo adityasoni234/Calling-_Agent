@@ -8,6 +8,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.models.billing import CreditEntry, CreditEntryKind
 from app.models.call import Call, CallStatus
 from app.models.organization import Organization
@@ -54,6 +55,37 @@ def test_credits_scale_with_what_the_call_cost_us(db_session) -> None:
 def test_a_connected_call_is_never_free(db_session) -> None:
     """The carrier bills us for the attempt, so a zero-cost charge is a loss."""
     assert BillingService(db_session).credits_for(0.0) == MINIMUM_CALL_CREDITS
+
+
+def test_every_call_is_sold_above_what_it_cost_us(db_session) -> None:
+    """The regression that made the whole platform lose money.
+
+    Credits were defined in US cents while packages were priced in rupees and
+    nothing converted between them, so a minute costing Rs10 was sold for Rs2.
+    This asserts the two units meet: the rupees a call earns must exceed the
+    rupees it cost, by the configured markup.
+    """
+    billing = BillingService(db_session)
+    for cost_usd in (0.02, 0.05, 0.1147, 0.45):
+        cost_inr = cost_usd * settings.usd_inr_rate
+        earned_inr = BillingService.rupees(billing.credits_for(cost_usd))
+        assert earned_inr > cost_inr, f"${cost_usd} sells for less than it costs"
+        assert earned_inr == pytest.approx(cost_inr * settings.credit_markup_multiplier, rel=0.01)
+
+
+def test_a_cheaper_carrier_lowers_the_price_and_keeps_the_margin(db_session) -> None:
+    """Cost-plus must stay self-correcting, or switching carrier breaks pricing."""
+    billing = BillingService(db_session)
+    twilio_minute, domestic_minute = 0.1147, 0.0574
+    dear, cheap = billing.credits_for(twilio_minute), billing.credits_for(domestic_minute)
+
+    assert cheap < dear  # the customer pays less
+
+    def margin(credits: float, cost_usd: float) -> float:
+        earned = BillingService.rupees(credits)
+        return (earned - cost_usd * settings.usd_inr_rate) / earned
+
+    assert margin(cheap, domestic_minute) == pytest.approx(margin(dear, twilio_minute), rel=0.01)
 
 
 # --- the ledger -------------------------------------------------------
@@ -297,7 +329,6 @@ async def test_an_admin_cannot_lock_themselves_out(
 
 async def test_a_new_organization_starts_with_trial_credits(client: AsyncClient) -> None:
     """An account that cannot place one test call will not convert."""
-    from app.core.config import settings
 
     registered = await client.post(
         "/auth/register",

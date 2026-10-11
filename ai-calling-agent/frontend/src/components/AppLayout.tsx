@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import { NAV_GROUPS, type NavItem } from '@/components/nav'
-import { useCampaigns, useLeadCount } from '@/hooks/api'
-import { useHealth } from '@/hooks/useHealth'
-import { initials } from '@/lib/format'
-import { useAuthStore } from '@/stores/auth'
+import { NAV_GROUPS, type NavItem } from "@/components/nav";
+import { useCampaigns, useLeadCount, useUnreadCount } from "@/hooks/api";
+import { useHealth } from "@/hooks/useHealth";
+import { initials } from "@/lib/format";
+import { useAuthStore } from "@/stores/auth";
 
 function Icon({ path }: { path: string }) {
   return (
@@ -21,20 +21,22 @@ function Icon({ path }: { path: string }) {
     >
       <path d={path} />
     </svg>
-  )
+  );
 }
 
 /** Counts worth seeing without opening the page. */
 function useNavBadges() {
-  const qualified = useLeadCount('qualified,converted')
-  const campaigns = useCampaigns()
+  const qualified = useLeadCount("qualified,converted");
+  const unread = useUnreadCount();
+  const campaigns = useCampaigns();
   const running = (campaigns.data?.items ?? []).filter(
-    (campaign) => campaign.status === 'running',
-  ).length
+    (campaign) => campaign.status === "running",
+  ).length;
   return {
     qualified: qualified.data || undefined,
-    'running-campaigns': running || undefined,
-  } as Record<string, number | undefined>
+    "running-campaigns": running || undefined,
+    "unread-messages": unread.data?.unread || undefined,
+  } as Record<string, number | undefined>;
 }
 
 function NavRow({
@@ -42,9 +44,9 @@ function NavRow({
   badge,
   onNavigate,
 }: {
-  item: NavItem
-  badge?: number
-  onNavigate?: () => void
+  item: NavItem;
+  badge?: number;
+  onNavigate?: () => void;
 }) {
   return (
     <NavLink
@@ -55,8 +57,8 @@ function NavRow({
       className={({ isActive }) =>
         `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-150 ${
           isActive
-            ? 'bg-brand-50 font-medium text-brand-800'
-            : 'text-ink-600 hover:bg-ink-100 hover:text-ink-900'
+            ? "bg-brand-50 font-medium text-brand-800"
+            : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
         }`
       }
     >
@@ -70,32 +72,36 @@ function NavRow({
           {badge !== undefined && (
             <span
               className={`rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums ${
-                isActive ? 'bg-brand-600 text-white' : 'bg-ink-200/80 text-ink-600'
+                isActive
+                  ? "bg-brand-600 text-white"
+                  : "bg-ink-200/80 text-ink-600"
               }`}
             >
-              {badge > 999 ? '999+' : badge}
+              {badge > 999 ? "999+" : badge}
             </span>
           )}
         </>
       )}
     </NavLink>
-  )
+  );
 }
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
-  const badges = useNavBadges()
-  const isPlatformAdmin = useAuthStore((state) => Boolean(state.user?.is_platform_admin))
+  const badges = useNavBadges();
+  const isPlatformAdmin = useAuthStore((state) =>
+    Boolean(state.user?.is_platform_admin),
+  );
   // Drop platform-only groups entirely rather than rendering a disabled link:
   // a customer should not learn that an admin surface exists.
   const groups = NAV_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) => !item.platformOnly || isPlatformAdmin),
-  })).filter((group) => group.items.length > 0)
+  })).filter((group) => group.items.length > 0);
 
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-4">
       {groups.map((group, index) => (
-        <div key={group.title ?? 'main'} className={index > 0 ? 'mt-5' : ''}>
+        <div key={group.title ?? "main"} className={index > 0 ? "mt-5" : ""}>
           {group.title && (
             <p className="px-3 pb-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-ink-400">
               {group.title}
@@ -114,32 +120,34 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       ))}
     </nav>
-  )
+  );
 }
 
 function HealthPill() {
-  const { data: health } = useHealth()
-  const ok = health?.status === 'ok'
+  const { data: health } = useHealth();
+  const ok = health?.status === "ok";
   return (
     <div className="mx-3 mb-4 rounded-xl bg-ink-100/70 px-3.5 py-3">
       <div className="flex items-center gap-2 text-2xs text-ink-500">
         <span className="relative flex h-2 w-2" aria-hidden>
           <span
             className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${
-              ok ? 'bg-emerald-400' : 'bg-amber-400'
+              ok ? "bg-emerald-400" : "bg-amber-400"
             }`}
           />
           <span
             className={`relative inline-flex h-2 w-2 rounded-full ${
-              ok ? 'bg-emerald-400' : 'bg-amber-400'
+              ok ? "bg-emerald-400" : "bg-amber-400"
             }`}
           />
         </span>
-        API {health ? health.status : 'checking'}
-        {health && <span className="ml-auto text-ink-400">v{health.version}</span>}
+        API {health ? health.status : "checking"}
+        {health && (
+          <span className="ml-auto text-ink-400">v{health.version}</span>
+        )}
       </div>
     </div>
-  )
+  );
 }
 
 function Brand({ organization }: { organization: string }) {
@@ -153,43 +161,45 @@ function Brand({ organization }: { organization: string }) {
         <p className="truncate text-2xs text-ink-500">{organization}</p>
       </div>
     </div>
-  )
+  );
 }
 
 export function AppLayout() {
-  const user = useAuthStore((state) => state.user)
-  const logout = useAuthStore((state) => state.logout)
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // A menu that will not close on an outside click feels broken.
   useEffect(() => {
-    if (!menuOpen) return
+    if (!menuOpen) return;
     const onClick = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [menuOpen])
+      if (menuRef.current && !menuRef.current.contains(event.target as Node))
+        setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [menuOpen]);
 
   // Navigating should dismiss the drawer, and Escape should always close it.
-  useEffect(() => setDrawerOpen(false), [location.pathname])
+  useEffect(() => setDrawerOpen(false), [location.pathname]);
   useEffect(() => {
-    if (!drawerOpen) return
-    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && setDrawerOpen(false)
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [drawerOpen])
+    if (!drawerOpen) return;
+    const onKey = (event: KeyboardEvent) =>
+      event.key === "Escape" && setDrawerOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
 
   const handleLogout = async () => {
-    await logout()
-    navigate('/login', { replace: true })
-  }
+    await logout();
+    navigate("/login", { replace: true });
+  };
 
-  const organization = user?.organization?.name ?? ''
+  const organization = user?.organization?.name ?? "";
 
   return (
     <div className="min-h-screen bg-ink-50">
@@ -246,9 +256,11 @@ export function AppLayout() {
               className="flex items-center gap-2.5 rounded-xl py-1.5 pl-1.5 pr-3 text-sm text-ink-700 transition-colors hover:bg-white hover:shadow-card"
             >
               <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-sheen text-2xs font-semibold text-white">
-                {initials(user?.full_name ?? '?')}
+                {initials(user?.full_name ?? "?")}
               </span>
-              <span className="hidden font-medium sm:inline">{user?.full_name}</span>
+              <span className="hidden font-medium sm:inline">
+                {user?.full_name}
+              </span>
             </button>
 
             {menuOpen && (
@@ -257,7 +269,9 @@ export function AppLayout() {
                 className="absolute right-0 mt-2 w-60 animate-fade-up overflow-hidden rounded-2xl bg-white shadow-lift ring-1 ring-ink-200"
               >
                 <div className="border-b border-ink-100 px-4 py-3">
-                  <p className="truncate text-sm font-medium text-ink-900">{user?.email}</p>
+                  <p className="truncate text-sm font-medium text-ink-900">
+                    {user?.email}
+                  </p>
                   <p className="mt-0.5 text-2xs capitalize text-ink-400">
                     {user?.role} · {organization}
                   </p>
@@ -280,5 +294,5 @@ export function AppLayout() {
         </main>
       </div>
     </div>
-  )
+  );
 }

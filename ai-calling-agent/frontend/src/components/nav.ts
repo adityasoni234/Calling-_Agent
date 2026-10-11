@@ -13,7 +13,7 @@ export interface NavItem {
   /** One line, shown in the mobile drawer and as a tooltip. */
   hint: string;
   /** Which live count to show as a badge, if any. */
-  badge?: "qualified" | "running-campaigns";
+  badge?: "qualified" | "running-campaigns" | "unread-messages";
   /** Platform staff only. Hidden from customers entirely. */
   platformOnly?: boolean;
 }
@@ -52,6 +52,13 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Manual Calling",
         hint: "Call a lead yourself — we ring your phone first",
         icon: "M3 5a2 2 0 012-2h2l2 5-2 1a12 12 0 006 6l1-2 5 2v2a2 2 0 01-2 2A16 16 0 013 5zM16 3h6m-3-3v6",
+      },
+      {
+        to: "/messages",
+        label: "Messages",
+        hint: "SMS and WhatsApp — send, reply, and see what was delivered",
+        badge: "unread-messages",
+        icon: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z",
       },
       {
         to: "/calls",

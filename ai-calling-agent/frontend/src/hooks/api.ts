@@ -4,6 +4,12 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 import type {
   Agent,
+  Channel,
+  Conversation,
+  Message as SmsMessage,
+  MessageTemplate,
+  SendEstimate,
+  Suppression,
   Checkout,
   CreditBalance,
   CreditPackage,
@@ -750,5 +756,158 @@ export function useConfirmCheckout() {
       client.invalidateQueries({ queryKey: ["credit-balance"] });
       client.invalidateQueries({ queryKey: ["credit-ledger"] });
     },
+  });
+}
+
+// --- messaging --------------------------------------------------------
+
+export interface MessageQuery {
+  channel?: Channel;
+  status?: string;
+  direction?: string;
+  conversation_id?: string;
+  search?: string;
+}
+
+export function useConversations(channel?: Channel, unreadOnly = false) {
+  return useQuery({
+    queryKey: ["conversations", channel ?? "all", unreadOnly],
+    queryFn: () =>
+      api.get<Page<Conversation>>(
+        `/messaging/conversations${query({ channel, unread_only: unreadOnly ? "true" : undefined, page_size: 100 })}`,
+      ),
+    // An inbox that needs a manual refresh is an inbox people stop trusting.
+    refetchInterval: 20_000,
+  });
+}
+
+export function useMessages(filters: MessageQuery = {}, page = 1) {
+  return useQuery({
+    queryKey: ["messages", filters, page],
+    queryFn: () =>
+      api.get<Page<SmsMessage>>(
+        `/messaging/messages${query({ ...filters, page, page_size: 50 })}`,
+      ),
+  });
+}
+
+export function useUnreadCount() {
+  return useQuery({
+    queryKey: ["messaging-unread"],
+    queryFn: () => api.get<{ unread: number }>("/messaging/unread"),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useMarkConversationRead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<Conversation>(`/messaging/conversations/${id}/read`, {}),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["conversations"] });
+      client.invalidateQueries({ queryKey: ["messaging-unread"] });
+    },
+  });
+}
+
+export interface SendPayload {
+  to_number: string;
+  channel: Channel;
+  body?: string;
+  template_id?: string;
+  from_number?: string;
+  idempotency_key?: string;
+}
+
+export function useSendMessage() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SendPayload) =>
+      api.post<SmsMessage>("/messaging/messages", payload),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["messages"] });
+      client.invalidateQueries({ queryKey: ["conversations"] });
+      client.invalidateQueries({ queryKey: ["credit-balance"] });
+    },
+  });
+}
+
+/**
+ * Price a send before committing to it.
+ *
+ * A mutation rather than a query: it is an explicit "show me the bill" step,
+ * and firing it on every keystroke would both spam the server and make the
+ * number flicker while someone is still typing the recipient list.
+ */
+export function useEstimateSend() {
+  return useMutation({
+    mutationFn: (payload: {
+      channel: Channel;
+      recipients: string[];
+      body?: string;
+      template_id?: string;
+    }) => api.post<SendEstimate>("/messaging/estimate", payload),
+  });
+}
+
+export function useTemplates(channel?: Channel) {
+  return useQuery({
+    queryKey: ["templates", channel ?? "all"],
+    queryFn: () =>
+      api.get<MessageTemplate[]>(`/messaging/templates${query({ channel })}`),
+  });
+}
+
+export function useCreateTemplate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      name: string;
+      channel: Channel;
+      body: string;
+      language?: string;
+      category?: string;
+    }) => api.post<MessageTemplate>("/messaging/templates", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["templates"] }),
+  });
+}
+
+export function useDeleteTemplate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/messaging/templates/${id}`),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["templates"] }),
+  });
+}
+
+export function useSuppressions(page = 1, search?: string) {
+  return useQuery({
+    queryKey: ["suppressions", page, search],
+    queryFn: () =>
+      api.get<Page<Suppression>>(
+        `/messaging/suppressions${query({ page, search, page_size: 50 })}`,
+      ),
+  });
+}
+
+export function useAddSuppression() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      contact_number: string;
+      channel?: Channel;
+      reason?: string;
+      note?: string;
+    }) => api.post<Suppression>("/messaging/suppressions", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["suppressions"] }),
+  });
+}
+
+export function useRemoveSuppression() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/messaging/suppressions/${id}`),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["suppressions"] }),
   });
 }

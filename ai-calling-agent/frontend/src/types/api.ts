@@ -770,3 +770,88 @@ export interface CustomerProfile {
   /** Paid orders whose credits never landed. Should always be empty. */
   unallocated_orders: AdminOrder[];
 }
+
+// --- messaging --------------------------------------------------------
+
+export type Channel = "sms" | "whatsapp";
+
+export interface Message {
+  id: string;
+  conversation_id: string | null;
+  campaign_id: string | null;
+  channel: Channel;
+  direction: "outbound" | "inbound";
+  status: string;
+  from_number: string;
+  to_number: string;
+  body: string | null;
+  segments: number;
+  region: string | null;
+  provider: string | null;
+  provider_message_id: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  /** A string, not a number: JSON numbers are floats and money is not. */
+  customer_charge_usd: string | null;
+  provider_cost_usd: string | null;
+  cost_incomplete: boolean;
+  suppression_reason: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface Conversation {
+  id: string;
+  channel: Channel;
+  contact_number: string;
+  contact_name: string | null;
+  lead_id: string | null;
+  last_message_at: string | null;
+  last_inbound_at: string | null;
+  unread_count: number;
+  is_archived: boolean;
+  /** Whether a free-form WhatsApp reply is allowed right now. Server-computed. */
+  session_open: boolean;
+  created_at: string;
+}
+
+export interface MessageTemplate {
+  id: string;
+  channel: Channel;
+  name: string;
+  language: string;
+  category: string | null;
+  body: string;
+  variables: string[];
+  status: string;
+  rejection_reason: string | null;
+  provider_template_id: string | null;
+  placeholder_count: number;
+  created_at: string;
+}
+
+export interface Suppression {
+  id: string;
+  contact_number: string;
+  channel: Channel | null;
+  reason: string;
+  note: string | null;
+  created_at: string;
+}
+
+/** Everything a sender should see before committing to a bulk send. */
+export interface SendEstimate {
+  recipients: number;
+  suppressed: number;
+  billable_recipients: number;
+  segments_per_message: number;
+  total_segments: number;
+  customer_charge_usd: string;
+  provider_cost_usd: string;
+  gross_profit_usd: string | null;
+  gross_margin_percent: string | null;
+  cost_incomplete: boolean;
+  notes: string[];
+}

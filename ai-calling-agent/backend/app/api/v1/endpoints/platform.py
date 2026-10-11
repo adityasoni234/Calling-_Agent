@@ -35,11 +35,15 @@ from app.schemas.platform import (
     PlatformEventRead,
     PlatformOverview,
     PlatformUserRead,
+    ProviderConnectionRead,
+    ProviderHealth,
+    ProviderWrite,
     SuspendRequest,
     UserProfile,
 )
 from app.services.billing_service import BillingService, spend_total
 from app.services.order_service import OrderService
+from app.services.provider_service import PROVIDER_SPECS, ProviderService
 
 router = APIRouter(prefix="/platform", tags=["platform"])
 
@@ -863,3 +867,120 @@ async def organization_profile(
         recent_orders=orders,
         unallocated_orders=[o for o in orders if o.status == "paid" and not o.credits_allocated_at],
     )
+
+
+# --- provider connections ---------------------------------------------
+
+
+def _provider_read(connection) -> ProviderConnectionRead:  # noqa: ANN001
+    spec = PROVIDER_SPECS.get(connection.slug, {})
+    return ProviderConnectionRead(
+        **ProviderConnectionRead.model_validate(connection).model_dump(
+            exclude={"required_fields", "optional_fields", "docs_url"}
+        ),
+        required_fields=spec.get("required", []),
+        optional_fields=spec.get("optional", []),
+        docs_url=spec.get("docs"),
+    )
+
+
+@router.get(
+    "/providers",
+    response_model=list[ProviderConnectionRead],
+    summary="Every provider integration",
+)
+async def list_providers(db: DbSession, admin: PlatformAdmin) -> list[ProviderConnectionRead]:
+    """Configured connections, plus the ones that could be configured.
+
+    Showing the unconfigured ones is the point: an admin should be able to
+    see that Plivo exists and is not set up, rather than discovering the
+    integration only by reading the source.
+    """
+    service = ProviderService(db)
+    existing = {c.slug: c for c in await service.list_connections()}
+    out: list[ProviderConnectionRead] = []
+    for slug, spec in PROVIDER_SPECS.items():
+        connection = existing.get(slug)
+        if connection is not None:
+            out.append(_provider_read(connection))
+        else:
+            out.append(
+                ProviderConnectionRead(
+                    id=uuid.UUID(int=0),
+                    slug=slug,
+                    label=spec["label"],
+                    kind=str(spec["kind"]),
+                    environment="live",
+                    is_enabled=False,
+                    priority=100,
+                    status="unconfigured",
+                    status_detail="Not set up yet",
+                    secret_hints={},
+                    config={},
+                    last_checked_at=None,
+                    last_synced_at=None,
+                    secrets_rotated_at=None,
+                    created_at=datetime.now(UTC),
+                    required_fields=spec["required"],
+                    optional_fields=spec["optional"],
+                    docs_url=spec["docs"],
+                )
+            )
+    return out
+
+
+@router.put("/providers", response_model=ProviderConnectionRead, summary="Save credentials")
+async def save_provider(
+    payload: ProviderWrite, db: DbSession, admin: PlatformAdmin
+) -> ProviderConnectionRead:
+    """Encrypt and store. The plaintext is never returned or logged."""
+    connection = await ProviderService(db).upsert(
+        slug=payload.slug,
+        secrets=payload.secrets,
+        config=payload.config,
+        label=payload.label,
+        is_enabled=payload.is_enabled,
+        environment=payload.environment,
+        actor_id=admin.id,
+    )
+    # Which keys changed, never the values.
+    await _record(
+        db,
+        admin,
+        "provider.credentials_saved",
+        target=payload.slug,
+        detail=f"updated: {', '.join(sorted(payload.secrets)) or 'settings only'}",
+    )
+    return _provider_read(connection)
+
+
+@router.post(
+    "/providers/{connection_id}/check",
+    response_model=ProviderHealth,
+    summary="Test the connection",
+)
+async def check_provider(
+    connection_id: uuid.UUID, db: DbSession, admin: PlatformAdmin
+) -> ProviderHealth:
+    """A real authenticated read against the vendor, not a guess from the form."""
+    result = await ProviderService(db).check(connection_id)
+    return ProviderHealth(ok=result.ok, detail=result.detail, checked_at=result.checked_at)
+
+
+@router.post(
+    "/providers/{connection_id}/toggle",
+    response_model=ProviderConnectionRead,
+    summary="Enable or disable",
+)
+async def toggle_provider(
+    connection_id: uuid.UUID, enabled: bool, db: DbSession, admin: PlatformAdmin
+) -> ProviderConnectionRead:
+    connection = await ProviderService(db).set_enabled(connection_id, enabled)
+    await _record(
+        db,
+        admin,
+        "provider.toggled",
+        target=connection.slug,
+        detail="enabled" if enabled else "disabled",
+    )
+    return _provider_read(connection)

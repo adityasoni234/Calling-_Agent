@@ -233,3 +233,54 @@ class UserProfile(BaseModel):
     recent_orders: list[AdminOrderRead]
     #: Paid orders whose credits never landed. Should always be empty.
     unallocated_orders: list[AdminOrderRead]
+
+
+class ProviderConnectionRead(BaseModel):
+    """A provider as the admin sees it.
+
+    Deliberately has no field that could carry a secret. `secret_hints` holds
+    masked tails only -- the last four characters, which an operator compares
+    against a vendor dashboard and which identify nothing alone.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    slug: str
+    label: str
+    kind: str
+    environment: str
+    is_enabled: bool
+    priority: int
+    status: str
+    status_detail: str | None
+    #: {"auth_token": "••••3456"}. Never plaintext.
+    secret_hints: dict
+    config: dict
+    last_checked_at: datetime | None
+    last_synced_at: datetime | None
+    secrets_rotated_at: datetime | None
+    created_at: datetime
+    #: Which fields this vendor needs, so the form and the validator agree.
+    required_fields: list[str] = []
+    optional_fields: list[str] = []
+    docs_url: str | None = None
+
+
+class ProviderWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str = Field(min_length=1, max_length=48)
+    #: Plaintext, inbound only. A blank value leaves that key untouched, so
+    #: editing one field in a form does not wipe the others.
+    secrets: dict[str, str] = Field(default_factory=dict)
+    config: dict = Field(default_factory=dict)
+    label: str | None = Field(default=None, max_length=120)
+    environment: str = Field(default="live", max_length=16)
+    is_enabled: bool = True
+
+
+class ProviderHealth(BaseModel):
+    ok: bool
+    detail: str
+    checked_at: datetime

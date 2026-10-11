@@ -855,3 +855,33 @@ export interface SendEstimate {
   cost_incomplete: boolean;
   notes: string[];
 }
+
+// --- provider connections ---------------------------------------------
+
+export interface ProviderConnection {
+  id: string;
+  slug: string;
+  label: string;
+  kind: string;
+  environment: string;
+  is_enabled: boolean;
+  priority: number;
+  status: string;
+  status_detail: string | null;
+  /** Masked tails only, e.g. {"auth_token": "••••3456"}. Never plaintext. */
+  secret_hints: Record<string, string>;
+  config: Record<string, unknown>;
+  last_checked_at: string | null;
+  last_synced_at: string | null;
+  secrets_rotated_at: string | null;
+  created_at: string;
+  required_fields: string[];
+  optional_fields: string[];
+  docs_url: string | null;
+}
+
+export interface ProviderHealth {
+  ok: boolean;
+  detail: string;
+  checked_at: string;
+}

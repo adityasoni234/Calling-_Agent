@@ -9,6 +9,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type {
   AdminOrder,
+  ProviderConnection,
+  ProviderHealth,
   AdminPackage,
   AdminPackageWrite,
   CreditEntry,
@@ -184,5 +186,52 @@ export function useRetryAllocation() {
     mutationFn: (id: string) =>
       api.post<AdminOrder>(`/platform/orders/${id}/retry-allocation`, {}),
     onSuccess: () => client.invalidateQueries({ queryKey: ["platform"] }),
+  });
+}
+
+// --- providers --------------------------------------------------------
+
+export function useProviders() {
+  return useQuery({
+    queryKey: ["platform", "providers"],
+    queryFn: () => api.get<ProviderConnection[]>("/platform/providers"),
+    retry: false,
+  });
+}
+
+export function useSaveProvider() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      slug: string;
+      secrets: Record<string, string>;
+      config?: Record<string, unknown>;
+      is_enabled?: boolean;
+    }) => api.put<ProviderConnection>("/platform/providers", body),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["platform", "providers"] }),
+  });
+}
+
+export function useCheckProvider() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<ProviderHealth>(`/platform/providers/${id}/check`, {}),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["platform", "providers"] }),
+  });
+}
+
+export function useToggleProvider() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      api.post<ProviderConnection>(
+        `/platform/providers/${id}/toggle?enabled=${enabled}`,
+        {},
+      ),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["platform", "providers"] }),
   });
 }

@@ -8,6 +8,7 @@ import { CustomerProfile } from "@/admin/pages/CustomerProfile";
 import { Customers } from "@/admin/pages/Customers";
 import { Orders } from "@/admin/pages/Orders";
 import { Packages } from "@/admin/pages/Packages";
+import { Providers } from "@/admin/pages/Providers";
 import { Overview } from "@/admin/pages/Overview";
 import { Users } from "@/admin/pages/Users";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -37,6 +38,7 @@ export default function AdminApp() {
             <Route path="/customers/:id" element={<CustomerProfile />} />
             <Route path="/packages" element={<Packages />} />
             <Route path="/orders" element={<Orders />} />
+            <Route path="/providers" element={<Providers />} />
             <Route path="/users" element={<Users />} />
             <Route path="/activity" element={<Activity />} />
           </Route>

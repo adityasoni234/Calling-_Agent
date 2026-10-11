@@ -62,6 +62,13 @@ from app.models.messaging import (
     SuppressionReason,
     TemplateStatus,
 )
+from app.models.meta import (
+    MetaAsset,
+    MetaAssetKind,
+    MetaConnection,
+    MetaConnectionStatus,
+    MetaLeadEvent,
+)
 from app.models.organization import Organization
 from app.models.package import CreditPackage, Order, OrderStatus, PackageKind, PaymentEvent
 from app.models.price_book import (
@@ -87,6 +94,11 @@ from app.models.reservation import CreditReservation, ReservationStatus
 from app.models.user import User, UserRole
 
 __all__ = [
+    "MetaLeadEvent",
+    "MetaConnectionStatus",
+    "MetaConnection",
+    "MetaAssetKind",
+    "MetaAsset",
     "ValidationMethod",
     "EmailVerdict",
     "EmailSuppressionReason",

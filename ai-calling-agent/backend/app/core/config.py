@@ -73,6 +73,14 @@ class Settings(BaseSettings):
     #: "mock", "smtp" (works with SES, Mailgun, anything) or "postmark".
     email_provider: str = "mock"
 
+    # --- Meta lead ads --------------------------------------------------
+    #: From developers.facebook.com. The secret also signs webhooks, so a
+    #: wrong one shows up as every lead webhook being rejected.
+    meta_app_id: str = ""
+    meta_app_secret: str = ""
+    #: Echoed back during Meta's webhook verification handshake.
+    meta_verify_token: str = ""
+
     # --- email delivery -------------------------------------------------
     smtp_host: str = ""
     smtp_port: int = 587

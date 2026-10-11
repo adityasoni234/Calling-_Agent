@@ -54,15 +54,22 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"],
-            name="fk_credit_entries_organization_id_organizations", ondelete="CASCADE",
+            ["organization_id"],
+            ["organizations.id"],
+            name="fk_credit_entries_organization_id_organizations",
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
-            ["call_id"], ["calls.id"], name="fk_credit_entries_call_id_calls", ondelete="SET NULL",
+            ["call_id"],
+            ["calls.id"],
+            name="fk_credit_entries_call_id_calls",
+            ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
-            ["actor_user_id"], ["users.id"],
-            name="fk_credit_entries_actor_user_id_users", ondelete="SET NULL",
+            ["actor_user_id"],
+            ["users.id"],
+            name="fk_credit_entries_actor_user_id_users",
+            ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_credit_entries"),
     )
@@ -83,12 +90,16 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.ForeignKeyConstraint(
-            ["actor_user_id"], ["users.id"],
-            name="fk_platform_events_actor_user_id_users", ondelete="SET NULL",
+            ["actor_user_id"],
+            ["users.id"],
+            name="fk_platform_events_actor_user_id_users",
+            ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"],
-            name="fk_platform_events_organization_id_organizations", ondelete="SET NULL",
+            ["organization_id"],
+            ["organizations.id"],
+            name="fk_platform_events_organization_id_organizations",
+            ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_platform_events"),
     )
@@ -100,5 +111,11 @@ def downgrade() -> None:
     op.drop_table("platform_events")
     op.drop_table("credit_entries")
     op.drop_column("users", "is_platform_admin")
-    for column in ("suspended_reason", "suspended_at", "credit_overdraft", "credit_balance", "plan"):
+    for column in (
+        "suspended_reason",
+        "suspended_at",
+        "credit_overdraft",
+        "credit_balance",
+        "plan",
+    ):
         op.drop_column("organizations", column)

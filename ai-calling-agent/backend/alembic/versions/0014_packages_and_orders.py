@@ -70,23 +70,34 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"],
-            name="fk_orders_organization_id_organizations", ondelete="CASCADE",
+            ["organization_id"],
+            ["organizations.id"],
+            name="fk_orders_organization_id_organizations",
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
-            ["created_by_user_id"], ["users.id"],
-            name="fk_orders_created_by_user_id_users", ondelete="SET NULL",
+            ["created_by_user_id"],
+            ["users.id"],
+            name="fk_orders_created_by_user_id_users",
+            ondelete="SET NULL",
         ),
         # RESTRICT: a package referenced by a real order must never be deleted.
         sa.ForeignKeyConstraint(
-            ["package_id"], ["credit_packages.id"],
-            name="fk_orders_package_id_credit_packages", ondelete="RESTRICT",
+            ["package_id"],
+            ["credit_packages.id"],
+            name="fk_orders_package_id_credit_packages",
+            ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_orders"),
         sa.UniqueConstraint("provider_order_id", name="uq_orders_provider_order_id"),
     )
-    for column in ("organization_id", "reference", "status", "provider_order_id",
-                   "provider_payment_id"):
+    for column in (
+        "organization_id",
+        "reference",
+        "status",
+        "provider_order_id",
+        "provider_payment_id",
+    ):
         op.create_index(f"ix_orders_{column}", "orders", [column])
 
     op.create_table(
@@ -103,7 +114,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.ForeignKeyConstraint(
-            ["order_id"], ["orders.id"], name="fk_payment_events_order_id_orders",
+            ["order_id"],
+            ["orders.id"],
+            name="fk_payment_events_order_id_orders",
             ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_payment_events"),
@@ -118,8 +131,12 @@ def upgrade() -> None:
     # traced all the way to the credits it granted.
     op.add_column("credit_entries", sa.Column("order_id", sa.Uuid(as_uuid=True), nullable=True))
     op.create_foreign_key(
-        "fk_credit_entries_order_id_orders", "credit_entries", "orders",
-        ["order_id"], ["id"], ondelete="SET NULL",
+        "fk_credit_entries_order_id_orders",
+        "credit_entries",
+        "orders",
+        ["order_id"],
+        ["id"],
+        ondelete="SET NULL",
     )
     op.create_index("ix_credit_entries_order_id", "credit_entries", ["order_id"])
 

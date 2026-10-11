@@ -23,9 +23,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "calls", sa.Column("initiated_by_user_id", sa.Uuid(as_uuid=True), nullable=True)
-    )
+    op.add_column("calls", sa.Column("initiated_by_user_id", sa.Uuid(as_uuid=True), nullable=True))
     op.add_column(
         "calls",
         sa.Column("source", sa.String(length=12), nullable=False, server_default="manual"),
@@ -35,7 +33,11 @@ def upgrade() -> None:
 
     op.create_foreign_key(
         "fk_calls_initiated_by_user_id_users",
-        "calls", "users", ["initiated_by_user_id"], ["id"], ondelete="SET NULL",
+        "calls",
+        "users",
+        ["initiated_by_user_id"],
+        ["id"],
+        ondelete="SET NULL",
     )
     op.create_index("ix_calls_initiated_by_user_id", "calls", ["initiated_by_user_id"])
     op.create_index("ix_calls_source", "calls", ["source"])

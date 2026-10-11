@@ -44,6 +44,14 @@ class Lead(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     company_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
+    #: Where this lead came from: "csv", "manual", "api", "website", or
+    #: "meta:<form id>". A first-class column rather than a key in `extra`
+    #: because "which source converts" is the question the pipeline exists
+    #: to answer, and you cannot filter or group by a JSON key cheaply.
+    source: Mapped[str] = mapped_column(String(64), default="manual", index=True)
+    #: The campaign, ad or sheet within that source.
+    source_detail: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
     status: Mapped[LeadStatus] = mapped_column(
         StrEnumType(LeadStatus, 24), default=LeadStatus.NEW, index=True
     )

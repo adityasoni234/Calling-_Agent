@@ -30,12 +30,16 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"],
-            name="fk_credit_reservations_organization_id_organizations", ondelete="CASCADE",
+            ["organization_id"],
+            ["organizations.id"],
+            name="fk_credit_reservations_organization_id_organizations",
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
-            ["call_id"], ["calls.id"],
-            name="fk_credit_reservations_call_id_calls", ondelete="CASCADE",
+            ["call_id"],
+            ["calls.id"],
+            name="fk_credit_reservations_call_id_calls",
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_credit_reservations"),
         # One hold per call: a retried origination must not stack two.

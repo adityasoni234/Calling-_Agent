@@ -37,17 +37,28 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"],
-            name="fk_activity_events_organization_id_organizations", ondelete="CASCADE",
+            ["organization_id"],
+            ["organizations.id"],
+            name="fk_activity_events_organization_id_organizations",
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
-            ["actor_user_id"], ["users.id"],
-            name="fk_activity_events_actor_user_id_users", ondelete="SET NULL",
+            ["actor_user_id"],
+            ["users.id"],
+            name="fk_activity_events_actor_user_id_users",
+            ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_activity_events"),
     )
-    for column in ("organization_id", "actor_user_id", "actor_type", "action",
-                   "entity_type", "entity_id", "request_id"):
+    for column in (
+        "organization_id",
+        "actor_user_id",
+        "actor_type",
+        "action",
+        "entity_type",
+        "entity_id",
+        "request_id",
+    ):
         op.create_index(f"ix_activity_events_{column}", "activity_events", [column])
     # The timeline is always read newest-first within one organization.
     op.create_index(

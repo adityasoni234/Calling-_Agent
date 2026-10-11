@@ -31,8 +31,84 @@ const when = (value: string | null) =>
     : "never";
 
 /** What each provider is for, in words rather than a slug. */
+/**
+ * Where each credential comes from.
+ *
+ * Written out because every one of these is a different console with the
+ * values in a different place, and the common failure is not a wrong key
+ * but a step skipped -- enabling the Gmail API, or registering the exact
+ * redirect URI.
+ */
+const SETUP: Record<string, { steps: string[]; note?: string }> = {
+  google: {
+    steps: [
+      "console.cloud.google.com → create a project",
+      "APIs & Services → Library → enable the Gmail API",
+      "OAuth consent screen → External → add scope gmail.send only",
+      "Credentials → Create credentials → OAuth client ID → Web application",
+      "Add the redirect URI shown below, exactly",
+      "Copy the client ID and secret into the fields here",
+    ],
+    note: "Enabling the Gmail API is the step people miss: without it a token is issued and every send returns 403, which reads like a permissions bug. The consent screen starts in Testing mode — up to 100 accounts can connect with no review.",
+  },
+  microsoft: {
+    steps: [
+      "portal.azure.com → App registrations → New registration",
+      "Redirect URI → Web → the URI shown below",
+      "API permissions → Microsoft Graph → Delegated → Mail.Send and offline_access",
+      "Certificates & secrets → New client secret",
+      "Copy the application ID and secret value into the fields here",
+    ],
+    note: "Copy the secret Value, not the Secret ID. The value is shown once and cannot be retrieved afterwards.",
+  },
+  twilio: {
+    steps: [
+      "console.twilio.com → Account → API keys & tokens",
+      "Copy the Account SID and Auth Token",
+    ],
+  },
+  meta: {
+    steps: [
+      "developers.facebook.com → My Apps → Create App → Business",
+      "Add the Facebook Login and Webhooks products",
+      "Settings → Basic → copy the App ID and App Secret",
+      "App review → request leads_retrieval",
+    ],
+    note: "leads_retrieval needs app review before it works outside your own test users.",
+  },
+};
+
+/** Where each provider sends the customer back after they approve. */
+const CALLBACK: Record<string, string> = {
+  google: "/api/v1/email/mailbox/callback",
+  microsoft: "/api/v1/email/mailbox/callback",
+  meta: "/api/v1/meta/callback",
+};
+
+/**
+ * The API's public origin, not this console's.
+ *
+ * A redirect URI pointing at the admin site is accepted by the provider's
+ * form and then fails at the moment a customer tries to connect, which is
+ * the worst time to find out. Derived from the configured API base so it
+ * cannot be the wrong one.
+ */
+function apiOrigin(): string {
+  const base =
+    (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
+    "http://localhost:8000/api/v1";
+  try {
+    return new URL(base).origin;
+  } catch {
+    return base.replace(/\/api\/v1\/?$/, "");
+  }
+}
+
 const PURPOSE: Record<string, string> = {
   twilio: "Places calls and sends SMS and WhatsApp.",
+  google: "Lets customers connect their own Gmail to send email from.",
+  microsoft: "Lets customers connect their own Outlook to send email from.",
+  meta: "Pulls leads from customers' Facebook and Instagram lead forms.",
   plivo: "Alternative carrier. Cheaper for Indian numbers than Twilio.",
   anthropic: "The model the agent thinks with.",
   deepgram: "Turns what the caller says into text.",
@@ -229,6 +305,43 @@ export function Providers() {
 
                   {open && (
                     <div className="space-y-3 border-t border-slate-800 pt-3.5">
+                      {SETUP[provider.slug] && (
+                        <div className="rounded-md border border-slate-800 bg-slate-950 px-3.5 py-3">
+                          <p className="text-[0.65rem] font-medium uppercase tracking-[0.1em] text-slate-500">
+                            Where to get these
+                          </p>
+                          <ol className="mt-2 space-y-1.5 text-[0.75rem] leading-relaxed text-slate-300">
+                            {SETUP[provider.slug].steps.map((step, index) => (
+                              <li key={step} className="flex gap-2.5">
+                                <span className="text-slate-600">
+                                  {index + 1}.
+                                </span>
+                                <span>{step}</span>
+                              </li>
+                            ))}
+                          </ol>
+                          {CALLBACK[provider.slug] && (
+                            <div className="mt-3">
+                              <p className="text-[0.65rem] uppercase tracking-[0.1em] text-slate-500">
+                                Redirect URI — paste exactly
+                              </p>
+                              <code className="mt-1 block break-all rounded bg-slate-900 px-2 py-1.5 font-mono text-[0.7rem] text-slate-200">
+                                {apiOrigin()}
+                                {CALLBACK[provider.slug]}
+                              </code>
+                              <p className="mt-1 text-[0.65rem] text-slate-500">
+                                Taken from this console's own API setting, so it
+                                is the URL the provider will actually reach.
+                              </p>
+                            </div>
+                          )}
+                          {SETUP[provider.slug].note && (
+                            <p className="mt-3 text-[0.7rem] leading-relaxed text-amber-400/90">
+                              {SETUP[provider.slug].note}
+                            </p>
+                          )}
+                        </div>
+                      )}
                       <p className="text-[0.75rem] text-slate-500">
                         Leave a field blank to keep the key that is already
                         saved. Nothing you type here can be read back.

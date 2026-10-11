@@ -27,7 +27,6 @@ from email.utils import formataddr
 
 import httpx
 
-from app.core.config import settings
 from app.core.crypto import decrypt, encrypt
 from app.core.errors import AppError
 from app.core.logging import get_logger
@@ -82,30 +81,47 @@ class MailboxGrant:
     daily_limit: int
 
 
-def google_configured() -> bool:
-    return bool(settings.google_client_id and settings.google_client_secret)
+async def oauth_client(provider: MailboxProvider) -> tuple[str, str]:
+    """The OAuth client id and secret for this provider.
+
+    Resolved from the admin-managed vault first and the environment second,
+    so rotating them is a form submission rather than a deploy.
+    """
+    from app.services.credentials import resolve
+
+    slug = "google" if provider is MailboxProvider.GMAIL else "microsoft"
+    creds = await resolve(slug)
+    return creds.get("client_id", ""), creds.get("client_secret", "")
 
 
-def microsoft_configured() -> bool:
-    return bool(settings.microsoft_client_id and settings.microsoft_client_secret)
+async def google_configured() -> bool:
+    cid, secret = await oauth_client(MailboxProvider.GMAIL)
+    return bool(cid and secret)
+
+
+async def microsoft_configured() -> bool:
+    cid, secret = await oauth_client(MailboxProvider.OUTLOOK)
+    return bool(cid and secret)
 
 
 def new_state() -> str:
     return secrets.token_urlsafe(32)
 
 
-def authorize_url(provider: MailboxProvider, state: str, redirect_uri: str) -> str:
+async def authorize_url(provider: MailboxProvider, state: str, redirect_uri: str) -> str:
     from urllib.parse import urlencode
 
+    client_id, client_secret = await oauth_client(provider)
+
     if provider is MailboxProvider.GMAIL:
-        if not google_configured():
+        if not (client_id and client_secret):
             raise AppError(
                 "Gmail connection is not set up on this platform yet.",
                 code="gmail_unconfigured",
             )
         return f"{GOOGLE_AUTH}?" + urlencode(
             {
-                "client_id": settings.google_client_id,
+                "client_id": client_id,
                 "redirect_uri": redirect_uri,
                 "response_type": "code",
                 "scope": " ".join(GOOGLE_SCOPES),
@@ -118,14 +134,14 @@ def authorize_url(provider: MailboxProvider, state: str, redirect_uri: str) -> s
             }
         )
 
-    if not microsoft_configured():
+    if not (client_id and client_secret):
         raise AppError(
             "Outlook connection is not set up on this platform yet.",
             code="outlook_unconfigured",
         )
     return f"{MS_AUTH}?" + urlencode(
         {
-            "client_id": settings.microsoft_client_id,
+            "client_id": client_id,
             "redirect_uri": redirect_uri,
             "response_type": "code",
             "scope": " ".join(MS_SCOPES),
@@ -143,12 +159,11 @@ async def exchange_code(provider: MailboxProvider, code: str, redirect_uri: str)
     """
     is_google = provider is MailboxProvider.GMAIL
     token_url = GOOGLE_TOKEN if is_google else MS_TOKEN
+    client_id, client_secret = await oauth_client(provider)
     data = {
         "code": code,
-        "client_id": settings.google_client_id if is_google else settings.microsoft_client_id,
-        "client_secret": settings.google_client_secret
-        if is_google
-        else settings.microsoft_client_secret,
+        "client_id": client_id,
+        "client_secret": client_secret,
         "redirect_uri": redirect_uri,
         "grant_type": "authorization_code",
     }
@@ -230,17 +245,14 @@ async def refresh_access_token(account: EmailAccount) -> str:
     expired rather than retried -- only they can fix it.
     """
     is_google = account.provider is MailboxProvider.GMAIL
+    client_id, client_secret = await oauth_client(account.provider)
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             GOOGLE_TOKEN if is_google else MS_TOKEN,
             data={
                 "refresh_token": decrypt(account.refresh_token),
-                "client_id": settings.google_client_id
-                if is_google
-                else settings.microsoft_client_id,
-                "client_secret": settings.google_client_secret
-                if is_google
-                else settings.microsoft_client_secret,
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "grant_type": "refresh_token",
             },
         )

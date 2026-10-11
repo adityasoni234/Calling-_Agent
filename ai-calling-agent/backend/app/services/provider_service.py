@@ -69,6 +69,27 @@ PROVIDER_SPECS: dict[str, dict] = {
         "optional": ["voice_id"],
         "docs": "https://docs.cartesia.ai/",
     },
+    "google": {
+        "kind": ProviderKind.MESSAGING,
+        "label": "Google (Gmail sending)",
+        "required": ["client_id", "client_secret"],
+        "optional": [],
+        "docs": "https://console.cloud.google.com/apis/credentials",
+    },
+    "microsoft": {
+        "kind": ProviderKind.MESSAGING,
+        "label": "Microsoft (Outlook sending)",
+        "required": ["client_id", "client_secret"],
+        "optional": [],
+        "docs": "https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps",
+    },
+    "meta": {
+        "kind": ProviderKind.MESSAGING,
+        "label": "Meta (lead ads)",
+        "required": ["app_id", "app_secret"],
+        "optional": ["verify_token"],
+        "docs": "https://developers.facebook.com/apps/",
+    },
     "razorpay": {
         "kind": ProviderKind.PAYMENTS,
         "label": "Razorpay",

@@ -522,8 +522,8 @@ async def list_mailboxes(db: DbSession, user: CurrentUser) -> dict:
     return {
         "accounts": accounts,
         "available": {
-            "gmail": google_configured(),
-            "outlook": microsoft_configured(),
+            "gmail": await google_configured(),
+            "outlook": await microsoft_configured(),
         },
         #: Stated up front rather than discovered. Personal Gmail is far
         #: lower than people expect, and exceeding it suspends the mailbox
@@ -556,7 +556,7 @@ async def connect_mailbox(provider: str, db: DbSession, user: SendUser) -> dict:
     _prune_states()
     state = new_state()
     _MAILBOX_STATES[state] = (user.organization_id, user.id, provider, time.time())
-    return {"authorize_url": authorize_url(kind, state, _mailbox_redirect())}
+    return {"authorize_url": await authorize_url(kind, state, _mailbox_redirect())}
 
 
 @router.get("/mailbox/callback", summary="Where the provider sends them back")

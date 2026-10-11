@@ -45,6 +45,19 @@ FALLBACKS: dict[str, dict[str, str]] = {
     "anthropic": {"api_key": "anthropic_api_key"},
     "deepgram": {"api_key": "deepgram_api_key"},
     "cartesia": {"api_key": "cartesia_api_key"},
+    "google": {
+        "client_id": "google_client_id",
+        "client_secret": "google_client_secret",
+    },
+    "microsoft": {
+        "client_id": "microsoft_client_id",
+        "client_secret": "microsoft_client_secret",
+    },
+    "meta": {
+        "app_id": "meta_app_id",
+        "app_secret": "meta_app_secret",
+        "verify_token": "meta_verify_token",
+    },
     "razorpay": {
         "key_id": "razorpay_key_id",
         "key_secret": "razorpay_key_secret",

@@ -38,6 +38,15 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
         # rather than crash-loop while Postgres is still starting.
         log.error("db.unavailable_at_startup", error=str(exc))
 
+    # Load admin-managed credentials into the cache, so adapters that read
+    # them synchronously start from the database rather than the environment.
+    try:
+        from app.services.credentials import warm_all
+
+        await warm_all()
+    except Exception as exc:  # noqa: BLE001 - never block startup on this
+        log.warning("credentials.warm_skipped", error=str(exc))
+
     yield
 
     await engine.dispose()

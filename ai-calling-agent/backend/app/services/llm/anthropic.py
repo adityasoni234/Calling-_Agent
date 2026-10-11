@@ -16,6 +16,7 @@ import httpx
 from app.core.config import settings
 from app.models.call import UsageComponent
 from app.services.base import ProviderError, UsageRecord
+from app.services.credentials import get_sync
 from app.services.llm.base import LLMDelta, LLMMessage, LLMProvider
 
 API_URL = "https://api.anthropic.com/v1/messages"
@@ -56,10 +57,11 @@ class AnthropicLLMProvider(LLMProvider):
     name = "anthropic"
 
     def _headers(self) -> dict[str, str]:
-        if not settings.anthropic_api_key:
+        creds = get_sync("anthropic")
+        if not creds.get("api_key"):
             raise ProviderError("anthropic", "ANTHROPIC_API_KEY is not set")
         headers = {
-            "x-api-key": settings.anthropic_api_key,
+            "x-api-key": creds["api_key"],
             "anthropic-version": API_VERSION,
             "content-type": "application/json",
         }

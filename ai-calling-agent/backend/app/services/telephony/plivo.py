@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.call import CallStatus
 from app.services.base import ProviderError
+from app.services.credentials import get_sync
 from app.services.telephony.base import (
     OriginateResult,
     TelephonyEvent,
@@ -32,9 +33,9 @@ class PlivoTelephonyProvider(TelephonyProvider):
     name = "plivo"
 
     def _auth(self) -> tuple[str, str]:
-        if not (settings.plivo_auth_id and settings.plivo_auth_token):
+        if not (get_sync("plivo").get("auth_id", "") and get_sync("plivo").get("auth_token", "")):
             raise ProviderError(self.name, "PLIVO_AUTH_ID / PLIVO_AUTH_TOKEN are not set")
-        return settings.plivo_auth_id, settings.plivo_auth_token
+        return get_sync("plivo").get("auth_id", ""), get_sync("plivo").get("auth_token", "")
 
     async def originate(
         self,

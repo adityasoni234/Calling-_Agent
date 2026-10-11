@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.call import CallStatus
 from app.services.base import ProviderError
+from app.services.credentials import get_sync
 from app.services.telephony.base import (
     OriginateResult,
     TelephonyEvent,
@@ -73,9 +74,10 @@ class TwilioTelephonyProvider(TelephonyProvider):
     name = "twilio"
 
     def _auth(self) -> tuple[str, str]:
-        if not (settings.twilio_account_sid and settings.twilio_auth_token):
+        creds = get_sync("twilio")
+        if not (creds.get("account_sid") and creds.get("auth_token")):
             raise ProviderError(self.name, "TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN are not set")
-        return settings.twilio_account_sid, settings.twilio_auth_token
+        return creds["account_sid"], creds["auth_token"]
 
     async def originate(
         self,
@@ -90,7 +92,7 @@ class TwilioTelephonyProvider(TelephonyProvider):
         sid, token = self._auth()
         form = {
             "To": to_number,
-            "From": from_number or settings.twilio_caller_id,
+            "From": from_number or get_sync("twilio").get("caller_id") or settings.twilio_caller_id,
             "Url": answer_url,
             "Method": "POST",
             "StatusCallback": status_url,

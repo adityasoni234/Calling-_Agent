@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.call import UsageComponent
 from app.services.base import ProviderError, UsageRecord
+from app.services.credentials import get_sync
 from app.services.stt.base import STTEvent, STTEventType, STTProvider, STTSession
 
 log = get_logger(__name__)
@@ -97,7 +98,7 @@ class DeepgramSTTProvider(STTProvider):
     async def open(
         self, *, language: str, sample_rate: int = 8000, encoding: str = "mulaw"
     ) -> STTSession:
-        if not settings.deepgram_api_key:
+        if not get_sync("deepgram").get("api_key"):
             raise ProviderError("deepgram", "DEEPGRAM_API_KEY is not set")
 
         params = {
@@ -122,7 +123,9 @@ class DeepgramSTTProvider(STTProvider):
             connection = await asyncio.wait_for(
                 websockets.connect(
                     url,
-                    additional_headers={"Authorization": f"Token {settings.deepgram_api_key}"},
+                    additional_headers={
+                        "Authorization": f"Token {get_sync('deepgram')['api_key']}"
+                    },
                     ping_interval=5,
                 ),
                 timeout=8,

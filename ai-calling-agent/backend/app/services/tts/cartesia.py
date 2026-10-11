@@ -16,6 +16,7 @@ import httpx
 
 from app.core.config import settings
 from app.services.base import ProviderError
+from app.services.credentials import get_sync
 from app.services.tts.base import TTSProvider
 
 API_URL = "https://api.cartesia.ai/tts/sse"
@@ -33,7 +34,8 @@ class CartesiaTTSProvider(TTSProvider):
         sample_rate: int = 8000,
         encoding: str = "mulaw",
     ) -> AsyncIterator[bytes]:
-        if not settings.cartesia_api_key:
+        creds = get_sync("cartesia")
+        if not creds.get("api_key"):
             raise ProviderError(self.name, "CARTESIA_API_KEY is not set")
 
         voice_id = voice_config.get("voice_id") or settings.tts_voice_id
@@ -52,7 +54,7 @@ class CartesiaTTSProvider(TTSProvider):
             },
         }
         headers = {
-            "X-API-Key": settings.cartesia_api_key,
+            "X-API-Key": creds["api_key"],
             "Cartesia-Version": API_VERSION,
             "Content-Type": "application/json",
         }

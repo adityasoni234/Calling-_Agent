@@ -204,9 +204,13 @@ class ProviderService:
 
         await self.db.commit()
         await self.db.refresh(connection)
-        from app.services.credentials import invalidate
+        from app.services.credentials import invalidate, resolve
 
         invalidate(slug)
+        # Re-resolve straight away rather than waiting for something else to
+        # warm the cache: adapters that read credentials synchronously would
+        # otherwise keep using the old key until it happened to refill.
+        await resolve(slug)
         log.info("provider.saved", slug=slug, rotated=rotated, enabled=is_enabled)
         return connection
 

@@ -270,3 +270,48 @@ async def test_rotating_a_key_takes_effect_without_waiting_for_a_cache(
 
     await service.upsert(slug="cartesia", secrets={"api_key": "second"})
     assert (await resolve("cartesia"))["api_key"] == "second"
+
+
+async def test_every_adapter_reads_the_vault_not_the_environment(
+    db_session, auth_headers, monkeypatch
+) -> None:
+    """The admin page has to govern all of them, not just messaging.
+
+    Four adapters read settings directly until now, so rotating a Deepgram or
+    Anthropic key in the admin changed nothing about what the agent actually
+    used.
+    """
+    from app.core.config import settings
+    from app.services.credentials import get_sync, invalidate, warm_all
+
+    for attr, value in (
+        ("anthropic_api_key", "env_anthropic"),
+        ("deepgram_api_key", "env_deepgram"),
+        ("cartesia_api_key", "env_cartesia"),
+    ):
+        monkeypatch.setattr(settings, attr, value)
+    invalidate()
+
+    # Cold cache: the environment is the documented fallback.
+    assert get_sync("anthropic")["api_key"] == "env_anthropic"
+
+    service = ProviderService(db_session)
+    for slug in ("anthropic", "deepgram", "cartesia"):
+        await service.upsert(slug=slug, secrets={"api_key": f"db_{slug}"})
+
+    await warm_all()
+    for slug in ("anthropic", "deepgram", "cartesia"):
+        assert get_sync(slug)["api_key"] == f"db_{slug}", f"{slug} ignored the vault"
+
+
+async def test_saving_a_key_makes_it_live_without_a_restart(db_session, auth_headers) -> None:
+    """A sync reader must not keep the old key until the cache happens to refill."""
+    from app.services.credentials import get_sync, invalidate
+
+    invalidate()
+    service = ProviderService(db_session)
+    await service.upsert(slug="cartesia", secrets={"api_key": "first"})
+    assert get_sync("cartesia")["api_key"] == "first"
+
+    await service.upsert(slug="cartesia", secrets={"api_key": "rotated"})
+    assert get_sync("cartesia")["api_key"] == "rotated"

@@ -93,3 +93,28 @@ def invalidate(slug: str | None = None) -> None:
         _cache.clear()
     else:
         _cache.pop(slug, None)
+
+
+def get_sync(slug: str) -> dict[str, str]:
+    """Credentials without awaiting, for adapters that are not async there.
+
+    Reads the cache the async resolver fills. A cold cache falls back to the
+    environment rather than blocking on a database round trip inside what may
+    be an audio loop -- which is why `warm_all` runs at startup and every
+    credential save re-resolves immediately. Without those two, a sync reader
+    would keep using the environment until something else happened to warm
+    the cache.
+    """
+    cached = _cache.get(slug)
+    if cached is not None and time.monotonic() - cached[0] < TTL_SECONDS:
+        return cached[1]
+    return _from_env(slug)
+
+
+async def warm_all() -> None:
+    """Resolve every provider once, so sync readers start from the database."""
+    for slug in FALLBACKS:
+        try:
+            await resolve(slug)
+        except Exception as exc:  # noqa: BLE001 - startup must not fail on this
+            log.warning("credentials.warm_failed", slug=slug, error=str(exc))

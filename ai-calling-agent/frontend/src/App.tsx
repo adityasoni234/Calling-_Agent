@@ -15,7 +15,8 @@ import { LeadsPage } from "@/pages/LeadsPage";
 import { LearningPage } from "@/pages/LearningPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ManualCallPage } from "@/pages/ManualCallPage";
-import { MessagesPage } from "@/pages/MessagesPage";
+import { SmsPage } from "@/pages/SmsPage";
+import { WhatsAppPage } from "@/pages/WhatsAppPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { QualifiedPage } from "@/pages/QualifiedPage";
 import { RegisterPage } from "@/pages/RegisterPage";
@@ -45,7 +46,10 @@ export default function App() {
             <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
             <Route path="/calls" element={<CallsPage />} />
             <Route path="/manual" element={<ManualCallPage />} />
-            <Route path="/messages" element={<MessagesPage />} />
+            <Route path="/sms" element={<SmsPage />} />
+            <Route path="/whatsapp" element={<WhatsAppPage />} />
+            {/* The old combined page; keep the path working for bookmarks. */}
+            <Route path="/messages" element={<Navigate to="/sms" replace />} />
             <Route path="/calls/:id" element={<CallDetailPage />} />
             <Route path="/knowledge" element={<KnowledgePage />} />
             <Route path="/api" element={<ApiPage />} />

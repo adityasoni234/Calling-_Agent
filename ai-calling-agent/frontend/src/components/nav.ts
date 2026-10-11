@@ -54,11 +54,17 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: "M3 5a2 2 0 012-2h2l2 5-2 1a12 12 0 006 6l1-2 5 2v2a2 2 0 01-2 2A16 16 0 013 5zM16 3h6m-3-3v6",
       },
       {
-        to: "/messages",
-        label: "Messages",
-        hint: "SMS and WhatsApp — send, reply, and see what was delivered",
+        to: "/sms",
+        label: "SMS",
+        hint: "Text messages — send, reply, and see what was delivered",
         badge: "unread-messages",
         icon: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z",
+      },
+      {
+        to: "/whatsapp",
+        label: "WhatsApp",
+        hint: "WhatsApp messages, templates and approvals",
+        icon: "M21 11.5a8.4 8.4 0 01-12.6 7.3L3 20.5l1.8-5.3A8.4 8.4 0 1121 11.5z",
       },
       {
         to: "/calls",

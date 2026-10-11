@@ -12,6 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.call import Call, CallStatus, CallUsage
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.lead import Lead, LeadStatus
+from app.models.messaging import (
+    Conversation,
+    Message,
+    MessageCampaign,
+    MessageCampaignStatus,
+    MessageDirection,
+)
 
 QUALIFIED = (LeadStatus.QUALIFIED, LeadStatus.CONVERTED)
 INTERESTED = (LeadStatus.INTERESTED, LeadStatus.QUALIFIED, LeadStatus.CONVERTED)
@@ -86,6 +93,71 @@ class AnalyticsService:
             / 60
         )
 
+        # --- messaging -------------------------------------------------
+        # Counted alongside calls, not bolted on elsewhere: a customer who
+        # mostly texts should not see a dashboard that says nothing happened.
+        message_totals = await self.db.execute(
+            select(
+                func.count(Message.id),
+                func.coalesce(func.sum(Message.customer_charge_usd), 0),
+            ).where(
+                Message.organization_id == organization_id,
+                Message.direction == MessageDirection.OUTBOUND,
+            )
+        )
+        message_count, message_spend = message_totals.one()
+
+        messages_today = int(
+            await self.db.scalar(
+                select(func.count(Message.id)).where(
+                    Message.organization_id == organization_id,
+                    Message.direction == MessageDirection.OUTBOUND,
+                    Message.created_at >= start_of_day,
+                )
+            )
+            or 0
+        )
+
+        by_status = await self.db.execute(
+            select(Message.status, func.count())
+            .where(
+                Message.organization_id == organization_id,
+                Message.direction == MessageDirection.OUTBOUND,
+            )
+            .group_by(Message.status)
+        )
+        statuses = {str(status): int(count) for status, count in by_status.all()}
+        delivered = statuses.get("delivered", 0) + statuses.get("read", 0)
+        failed = statuses.get("failed", 0) + statuses.get("undelivered", 0)
+        # Suppressed sends are excluded from the denominator: a customer's own
+        # opt-out list is not a delivery failure.
+        attempted = sum(v for k, v in statuses.items() if k != "suppressed")
+
+        unread = int(
+            await self.db.scalar(
+                select(func.coalesce(func.sum(Conversation.unread_count), 0)).where(
+                    Conversation.organization_id == organization_id,
+                    Conversation.is_archived.is_(False),
+                )
+            )
+            or 0
+        )
+
+        active_message_campaigns = int(
+            await self.db.scalar(
+                select(func.count(MessageCampaign.id)).where(
+                    MessageCampaign.organization_id == organization_id,
+                    MessageCampaign.status.in_(
+                        [
+                            MessageCampaignStatus.RUNNING,
+                            MessageCampaignStatus.SCHEDULED,
+                        ]
+                    ),
+                )
+            )
+            or 0
+        )
+
         return {
             "total_calls": total_calls,
             "calls_today": int(calls_today or 0),
@@ -105,6 +177,14 @@ class AnalyticsService:
             # The number of calls whose cost is a floor, not a real total,
             # because a rate was missing. Never hidden.
             "calls_with_incomplete_cost": int(incomplete or 0),
+            "messages_sent": int(message_count or 0),
+            "messages_today": messages_today,
+            "messages_delivered": delivered,
+            "messages_failed": failed,
+            "unread_replies": unread,
+            "delivery_rate": round(delivered / attempted * 100, 1) if attempted else None,
+            "message_cost_usd": float(message_spend or 0),
+            "active_message_campaigns": active_message_campaigns,
         }
 
     async def calls_per_day(

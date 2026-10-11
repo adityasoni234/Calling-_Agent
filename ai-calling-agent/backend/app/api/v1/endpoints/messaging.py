@@ -7,6 +7,7 @@ charged server-side: nothing here accepts a cost or charge from the client.
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
@@ -28,7 +29,9 @@ from app.models.messaging import (
     MessageStatus,
     MessageTemplate,
     Suppression,
+    TemplateStatus,
 )
+from app.models.price_book import Billable
 from app.models.user import User
 from app.schemas.common import MessageResponse, Page
 from app.schemas.messaging import (
@@ -49,8 +52,21 @@ from app.services.message_campaign_service import MessageCampaignService
 from app.services.messaging.base import MessagingNotConfigured
 from app.services.messaging.twilio import get_messaging_provider_async
 from app.services.messaging_service import MessagingService, normalise_number
+from app.services.pricing_engine import PricingEngine
 
 router = APIRouter(prefix="/messaging", tags=["messaging"])
+
+
+def _default_sender(channel: Channel) -> str:
+    """WhatsApp sends from a different number than voice calls.
+
+    Using the voice caller id for WhatsApp is rejected by Twilio with an
+    error that does not say why, so the two are kept distinct here.
+    """
+    if channel is Channel.WHATSAPP:
+        return settings.twilio_whatsapp_number or ""
+    return settings.twilio_caller_id or ""
+
 
 SendUser = Annotated[User, Depends(requires(Capability.SEND_MESSAGES))]
 TemplateUser = Annotated[User, Depends(requires(Capability.MANAGE_TEMPLATES))]
@@ -115,7 +131,7 @@ async def send_message(payload: MessageSend, db: DbSession, user: SendUser) -> M
     service = MessagingService(db)
     template = await _template(db, user, payload.template_id) if payload.template_id else None
     provider = await get_messaging_provider_async()
-    sender = payload.from_number or settings.twilio_caller_id or ""
+    sender = payload.from_number or _default_sender(payload.channel)
 
     message = await service.prepare(
         organization_id=user.organization_id,
@@ -492,3 +508,72 @@ async def control_campaign(
         raise NotFoundError(f"Unknown action {action!r}")
 
     return _campaign_read(campaign, await service.refresh_progress(campaign))
+
+
+@router.get("/readiness", summary="Can this account actually send?")
+async def readiness(db: DbSession, user: CurrentUser) -> dict:
+    """What is stopping each channel from working, in plain words.
+
+    Every one of these is a condition that otherwise surfaces as a failed
+    send minutes later, with a provider error that does not say which of the
+    four possible causes it was. Checking them up front turns "it doesn't
+    work" into a list someone can act on.
+    """
+    provider = await get_messaging_provider_async()
+    templates = await db.execute(
+        select(MessageTemplate).where(MessageTemplate.organization_id == user.organization_id)
+    )
+    all_templates = list(templates.scalars())
+    approved = [t for t in all_templates if t.status == TemplateStatus.APPROVED]
+
+    sms_blockers: list[str] = []
+    whatsapp_blockers: list[str] = []
+
+    if not provider.configured:
+        message = (
+            "No messaging provider is configured. Add Twilio credentials in "
+            "the admin provider settings."
+        )
+        sms_blockers.append(message)
+        whatsapp_blockers.append(message)
+    if not settings.twilio_caller_id:
+        sms_blockers.append("No SMS sender number is set (TWILIO_CALLER_ID).")
+    if not settings.twilio_whatsapp_number:
+        whatsapp_blockers.append(
+            "No WhatsApp sender is set. WhatsApp uses a different number from "
+            "voice calls — use Twilio's sandbox (+14155238886) to test, or a "
+            "number approved for WhatsApp Business."
+        )
+    if not approved:
+        whatsapp_blockers.append(
+            "No approved templates. WhatsApp only allows a free-form message "
+            "within 24 hours of the contact writing to you; anything else "
+            "needs a template approved by Meta."
+            + (
+                f" You have {len(all_templates)} awaiting approval."
+                if all_templates
+                else " Create one under Templates."
+            )
+        )
+
+    # Pricing is a blocker of a different kind: the send works but is billed
+    # at nothing, which is only discovered in a monthly margin report.
+    engine = PricingEngine(db)
+    unpriced = []
+    for channel, billable in (
+        ("sms", Billable.SMS_OUTBOUND),
+        ("whatsapp", Billable.WHATSAPP_OUTBOUND),
+    ):
+        quote = await engine.quote(
+            billable=billable, organization_id=user.organization_id, units=Decimal(1)
+        )
+        if quote.source == "unpriced":
+            unpriced.append(channel)
+
+    return {
+        "sms": {"ready": not sms_blockers, "blockers": sms_blockers},
+        "whatsapp": {"ready": not whatsapp_blockers, "blockers": whatsapp_blockers},
+        "provider": provider.name,
+        "templates": {"total": len(all_templates), "approved": len(approved)},
+        "unpriced_channels": unpriced,
+    }

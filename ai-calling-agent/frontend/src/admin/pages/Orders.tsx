@@ -14,6 +14,8 @@ import {
   Panel,
   Pill,
 } from "@/admin/ui";
+import { formatMinor } from "@/lib/format";
+
 import type { AdminOrder } from "@/types/api";
 
 /**
@@ -33,13 +35,7 @@ const FILTERS = [
   { key: "refunded", label: "Refunded" },
 ] as const;
 
-const money = (minor: number, currency = "USD") =>
-  new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(minor / 100);
+const money = (minor: number, currency = "USD") => formatMinor(minor, currency);
 
 const when = (value: string | null) =>
   value

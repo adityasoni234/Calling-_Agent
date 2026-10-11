@@ -65,6 +65,35 @@ export function Overview() {
             />
           </div>
 
+          {/* Messaging on its own row. A platform view that counts only
+              calls under-reports every customer who mostly texts. */}
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <Metric
+              label="Messages · 30d"
+              value={String(overview.messages_30d)}
+              sub={`${overview.messages_delivered_30d} delivered`}
+            />
+            <Metric
+              label="Message revenue · 30d"
+              value={`$${overview.message_revenue_30d_usd.toFixed(2)}`}
+              tone={overview.message_revenue_30d_usd > 0 ? "good" : "neutral"}
+            />
+            <Metric
+              label="Delivery rate"
+              value={
+                overview.delivery_rate === null
+                  ? "—"
+                  : `${overview.delivery_rate}%`
+              }
+              sub="Of attempted sends, excluding opt-outs"
+              tone={
+                overview.delivery_rate !== null && overview.delivery_rate < 85
+                  ? "bad"
+                  : "good"
+              }
+            />
+          </div>
+
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             <Panel
               title="Running low"

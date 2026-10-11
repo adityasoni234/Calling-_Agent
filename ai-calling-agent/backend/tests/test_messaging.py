@@ -752,3 +752,99 @@ async def test_an_inbound_to_an_unknown_number_creates_nothing(client, db_sessio
     assert response.status_code == 200
     after = await db_session.execute(select(Message))
     assert len(list(after.scalars())) == count
+
+
+# --- readiness and dashboard visibility -------------------------------
+
+
+async def test_readiness_names_what_is_blocking_whatsapp(client, auth_headers, db_session) -> None:
+    """ "It doesn't work" has four possible causes; this says which."""
+    response = await client.get("/messaging/readiness", headers=auth_headers)
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["whatsapp"]["ready"] is False
+    blockers = " ".join(body["whatsapp"]["blockers"]).lower()
+    assert "sender" in blockers
+    assert "template" in blockers
+    assert body["templates"] == {"total": 0, "approved": 0}
+
+
+async def test_readiness_stops_reporting_a_blocker_once_it_is_fixed(
+    client, auth_headers, db_session, monkeypatch
+) -> None:
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "twilio_whatsapp_number", "+14155238886")
+    body = (await client.get("/messaging/readiness", headers=auth_headers)).json()
+    assert not any("sender" in b.lower() for b in body["whatsapp"]["blockers"])
+
+
+async def test_readiness_flags_a_channel_that_would_send_for_free(
+    client, auth_headers, db_session
+) -> None:
+    """A send that works but bills nothing is only found in a margin report."""
+    body = (await client.get("/messaging/readiness", headers=auth_headers)).json()
+    assert "sms" in body["unpriced_channels"]
+
+    await _price(db_session, Billable.SMS_OUTBOUND)
+    body = (await client.get("/messaging/readiness", headers=auth_headers)).json()
+    assert "sms" not in body["unpriced_channels"]
+
+
+async def test_the_dashboard_counts_messages_alongside_calls(
+    client, auth_headers, db_session
+) -> None:
+    """A customer who mostly texts must not see a dashboard saying nothing happened."""
+    org = await _org(db_session)
+    await _price(db_session, Billable.SMS_OUTBOUND, rate="0.02")
+    service = MessagingService(db_session)
+
+    sent = await service.prepare(
+        organization_id=org.id,
+        channel=Channel.SMS,
+        to_number=TO,
+        from_number=FROM,
+        body="Hello",
+    )
+    await service.record_dispatch(sent, provider="mock", provider_message_id="SM_dash")
+    await service.apply_status_update(provider_message_id="SM_dash", status=MessageStatus.DELIVERED)
+    await service.record_inbound(
+        organization_id=org.id,
+        channel=Channel.SMS,
+        from_number=TO,
+        to_number=FROM,
+        body="Reply",
+        provider="mock",
+        provider_message_id="SM_dash_in",
+    )
+
+    overview = (await client.get("/analytics/overview", headers=auth_headers)).json()
+    assert overview["messages_sent"] == 1
+    assert overview["messages_today"] == 1
+    assert overview["messages_delivered"] == 1
+    assert overview["unread_replies"] == 1
+    assert overview["delivery_rate"] == 100.0
+    assert overview["message_cost_usd"] == 0.02
+
+
+async def test_a_suppressed_send_does_not_count_as_a_delivery_failure(
+    client, auth_headers, db_session
+) -> None:
+    """A healthy opt-out list must not look like a broken sender."""
+    org = await _org(db_session)
+    await _price(db_session, Billable.SMS_OUTBOUND)
+    service = MessagingService(db_session)
+    await service.opt_out(org.id, TO, reason=SuppressionReason.OPT_OUT)
+    await service.prepare(
+        organization_id=org.id,
+        channel=Channel.SMS,
+        to_number=TO,
+        from_number=FROM,
+        body="Hello",
+    )
+
+    overview = (await client.get("/analytics/overview", headers=auth_headers)).json()
+    # One suppressed message, nothing attempted: a rate of 0% would be a lie.
+    assert overview["delivery_rate"] is None
+    assert overview["messages_failed"] == 0

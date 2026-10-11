@@ -16,6 +16,9 @@ export function formatCurrency(amount: number, currency = "USD"): string {
   return new Intl.NumberFormat(undefined, {
     style: "currency",
     currency,
+    // Without this a non-US locale renders USD as "US$6.92". Everyone
+    // reading a figure on their own dashboard knows the currency already.
+    currencyDisplay: "narrowSymbol",
     maximumFractionDigits: amount < 1 ? 4 : 2,
   }).format(amount);
 }

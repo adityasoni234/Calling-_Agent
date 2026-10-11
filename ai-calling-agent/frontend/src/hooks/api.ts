@@ -9,6 +9,7 @@ import type {
   Message as SmsMessage,
   MessageCampaign,
   MessageTemplate,
+  MessagingReadiness,
   SendEstimate,
   Suppression,
   Checkout,
@@ -949,5 +950,13 @@ export function useControlMessageCampaign() {
       client.invalidateQueries({ queryKey: ["message-campaigns"] });
       client.invalidateQueries({ queryKey: ["messages"] });
     },
+  });
+}
+
+export function useMessagingReadiness() {
+  return useQuery({
+    queryKey: ["messaging-readiness"],
+    queryFn: () => api.get<MessagingReadiness>("/messaging/readiness"),
+    staleTime: 60_000,
   });
 }

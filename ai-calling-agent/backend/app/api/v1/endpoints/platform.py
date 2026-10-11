@@ -87,6 +87,38 @@ async def _record(
     await db.commit()
 
 
+async def _messaging_overview(db, since) -> dict:  # noqa: ANN001
+    """Messaging headline numbers for the platform view.
+
+    Separated so the overview endpoint stays readable, and so the delivery
+    rate is computed in exactly one place rather than differently here and
+    on the Messages page.
+    """
+    totals = await db.execute(
+        select(
+            func.count(Message.id),
+            func.coalesce(func.sum(Message.customer_charge_usd), 0),
+        ).where(Message.created_at >= since, Message.direction == "outbound")
+    )
+    count, revenue = totals.one()
+
+    rows = await db.execute(
+        select(Message.status, func.count())
+        .where(Message.created_at >= since, Message.direction == "outbound")
+        .group_by(Message.status)
+    )
+    statuses = {str(s): int(c) for s, c in rows.all()}
+    delivered = statuses.get("delivered", 0) + statuses.get("read", 0)
+    attempted = sum(v for k, v in statuses.items() if k != "suppressed")
+
+    return {
+        "messages_30d": int(count or 0),
+        "messages_delivered_30d": delivered,
+        "message_revenue_30d_usd": round(float(revenue or 0), 4),
+        "delivery_rate": round(delivered / attempted * 100, 1) if attempted else None,
+    }
+
+
 @router.get("/overview", response_model=PlatformOverview, summary="How the business is doing")
 async def overview(db: DbSession, admin: PlatformAdmin) -> PlatformOverview:
     since = _since()
@@ -143,6 +175,7 @@ async def overview(db: DbSession, admin: PlatformAdmin) -> PlatformOverview:
         provider_cost_30d_usd=round(provider_cost, 4),
         # Credits are cents of list price; margin is what we sold minus what we paid.
         gross_margin_30d_usd=round(consumed / 100.0 - provider_cost, 4),
+        **await _messaging_overview(db, since),
     )
 
 

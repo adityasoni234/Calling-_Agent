@@ -82,6 +82,11 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_caller_id: str = ""
+    #: WhatsApp uses a separate sender from the voice caller id. Twilio's
+    #: shared sandbox is +14155238886, which works once a recipient has
+    #: joined it -- the realistic way to test before a business number is
+    #: approved, which takes days.
+    twilio_whatsapp_number: str = ""
     telnyx_api_key: str = ""
     # The Call Control application the number is assigned to.
     telnyx_connection_id: str = ""

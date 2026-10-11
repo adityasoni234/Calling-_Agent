@@ -53,6 +53,12 @@ class PlatformOverview(BaseModel):
     #: Credit revenue recognised minus what the providers charged us.
     gross_margin_30d_usd: float
 
+    # Messaging, so the platform view is not calls-only.
+    messages_30d: int = 0
+    messages_delivered_30d: int = 0
+    message_revenue_30d_usd: float = 0.0
+    delivery_rate: float | None = None
+
 
 class CreditGrantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")

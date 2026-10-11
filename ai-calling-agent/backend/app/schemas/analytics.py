@@ -21,6 +21,20 @@ class Overview(BaseModel):
     cost_per_qualified_lead_usd: float
     calls_with_incomplete_cost: int
 
+    # Messaging. A dashboard that counts calls and ignores messages tells a
+    # customer who mostly texts that nothing is happening on their account.
+    messages_sent: int = 0
+    messages_today: int = 0
+    messages_delivered: int = 0
+    messages_failed: int = 0
+    #: Replies waiting. The one messaging number that needs an action.
+    unread_replies: int = 0
+    #: Of attempted sends; suppressed ones are excluded rather than counted
+    #: as failures, or a healthy opt-out list looks like a broken sender.
+    delivery_rate: float | None = None
+    message_cost_usd: float = 0.0
+    active_message_campaigns: int = 0
+
 
 class TimeSeriesPoint(BaseModel):
     date: str

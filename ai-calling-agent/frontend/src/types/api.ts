@@ -340,6 +340,15 @@ export interface Overview {
   cost_per_minute_usd: number;
   cost_per_qualified_lead_usd: number;
   calls_with_incomplete_cost: number;
+  messages_sent: number;
+  messages_today: number;
+  messages_delivered: number;
+  messages_failed: number;
+  unread_replies: number;
+  /** Of attempted sends; suppressed ones are excluded. Null when none tried. */
+  delivery_rate: number | null;
+  message_cost_usd: number;
+  active_message_campaigns: number;
 }
 
 export interface AnalyticsBundle {
@@ -524,6 +533,10 @@ export interface OrganizationSummary {
 }
 
 export interface PlatformOverview {
+  messages_30d: number;
+  messages_delivered_30d: number;
+  message_revenue_30d_usd: number;
+  delivery_rate: number | null;
   organizations: number;
   active_organizations: number;
   suspended: number;
@@ -943,4 +956,19 @@ export interface PriceBook {
   rules: PriceRule[];
   /** Billables priced under their own recorded cost. Empty is normal. */
   below_cost: string[];
+}
+
+/** Why a channel cannot send yet, in words a non-technical user can act on. */
+export interface ChannelReadiness {
+  ready: boolean;
+  blockers: string[];
+}
+
+export interface MessagingReadiness {
+  sms: ChannelReadiness;
+  whatsapp: ChannelReadiness;
+  provider: string;
+  templates: { total: number; approved: number };
+  /** Channels that would send but bill nothing. */
+  unpriced_channels: string[];
 }

@@ -20,7 +20,11 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState, Table } from "@/components/ui/Table";
 import { SetupChecklist } from "@/components/SetupChecklist";
 import { StatCard } from "@/components/ui/StatCard";
-import { useAnalytics, usePlatformSettings } from "@/hooks/api";
+import {
+  useAnalytics,
+  useMessagingReadiness,
+  usePlatformSettings,
+} from "@/hooks/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { formatCurrency, formatDuration } from "@/lib/format";
 
@@ -122,6 +126,54 @@ export function DashboardPage() {
           pending={isLoading}
         />
       </div>
+
+      {/* Messaging gets its own band rather than four more cards in the grid
+          above: calls and messages are different activities, and mixing the
+          counts makes neither readable. */}
+      <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Messages sent"
+          value={String(overview?.messages_sent ?? 0)}
+          hint={`${overview?.messages_today ?? 0} today`}
+          pending={isLoading}
+        />
+        <StatCard
+          label="Delivered"
+          value={
+            overview?.delivery_rate === null ||
+            overview?.delivery_rate === undefined
+              ? "—"
+              : `${overview.delivery_rate}%`
+          }
+          hint={
+            overview?.messages_failed
+              ? `${overview.messages_failed} failed or undelivered`
+              : "Of messages actually attempted"
+          }
+          pending={isLoading}
+        />
+        <StatCard
+          label="Unread replies"
+          value={String(overview?.unread_replies ?? 0)}
+          hint={
+            overview?.unread_replies
+              ? "Someone is waiting on an answer"
+              : "Nothing waiting"
+          }
+          accent={Boolean(overview?.unread_replies)}
+          pending={isLoading}
+        />
+        <StatCard
+          label="Message spend"
+          value={formatCurrency(overview?.message_cost_usd ?? 0)}
+          hint={`${overview?.active_message_campaigns ?? 0} campaign${
+            overview?.active_message_campaigns === 1 ? "" : "s"
+          } running`}
+          pending={isLoading}
+        />
+      </div>
+
+      <MessagingReadinessNotice />
 
       <section className="relative animate-fade-up overflow-hidden rounded-2xl bg-brand-sheen p-6 shadow-glow sm:p-7">
         <div
@@ -340,5 +392,56 @@ export function DashboardPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * Says why a channel cannot send, before someone tries and fails.
+ *
+ * Every blocker here otherwise surfaces minutes later as a provider error
+ * that does not identify which of four causes it was. Silent when both
+ * channels are ready -- a banner that is always there stops being read.
+ */
+function MessagingReadinessNotice() {
+  const readiness = useMessagingReadiness();
+  const data = readiness.data;
+  if (!data) return null;
+
+  const problems: { channel: string; blockers: string[] }[] = [];
+  if (!data.sms.ready)
+    problems.push({ channel: "SMS", blockers: data.sms.blockers });
+  if (!data.whatsapp.ready)
+    problems.push({ channel: "WhatsApp", blockers: data.whatsapp.blockers });
+
+  if (!problems.length && !data.unpriced_channels.length) return null;
+
+  return (
+    <Card title="Before you can send messages">
+      <div className="space-y-4 text-sm">
+        {problems.map((problem) => (
+          <div key={problem.channel}>
+            <p className="font-medium text-ink-900">{problem.channel}</p>
+            <ul className="mt-1.5 space-y-1">
+              {problem.blockers.map((blocker) => (
+                <li key={blocker} className="flex gap-2 text-ink-600">
+                  <span aria-hidden className="text-amber-600">
+                    &bull;
+                  </span>
+                  <span className="leading-relaxed">{blocker}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        {data.unpriced_channels.length > 0 && (
+          <Alert tone="warning">
+            {data.unpriced_channels.join(" and ")}{" "}
+            {data.unpriced_channels.length === 1 ? "has" : "have"} no published
+            price, so messages would send but bill nothing. Ask us to set a rate
+            before running a campaign.
+          </Alert>
+        )}
+      </div>
+    </Card>
   );
 }

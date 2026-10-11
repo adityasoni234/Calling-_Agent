@@ -15,6 +15,8 @@ import {
   Panel,
   Pill,
 } from "@/admin/ui";
+import { formatMinor } from "@/lib/format";
+
 import type { AdminPackage, AdminPackageWrite } from "@/types/api";
 
 /**
@@ -41,13 +43,7 @@ const BLANK: AdminPackageWrite = {
 
 /** Minor units as a plain decimal, for the price input's value. */
 const majorUnits = (minor: number) => (minor / 100).toFixed(2);
-const money = (minor: number, currency = "USD") =>
-  new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(minor / 100);
+const money = (minor: number, currency = "USD") => formatMinor(minor, currency);
 
 function slugify(name: string): string {
   return name

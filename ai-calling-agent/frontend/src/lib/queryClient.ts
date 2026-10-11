@@ -1,6 +1,6 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient } from "@tanstack/react-query";
 
-import { ApiError } from '@/lib/api'
+import { ApiError } from "@/lib/api";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -9,10 +9,10 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       retry: (failureCount, error) => {
         // Retrying an auth or validation failure just burns requests.
-        if (error instanceof ApiError && error.status < 500) return false
-        return failureCount < 2
+        if (error instanceof ApiError && error.status < 500) return false;
+        return failureCount < 2;
       },
     },
     mutations: { retry: false },
   },
-})
+});

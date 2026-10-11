@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState } from "react";
 
-import { Alert } from '@/components/ui/Alert'
-import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Field } from '@/components/ui/Field'
+import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Field } from "@/components/ui/Field";
 import {
   useApiKeys,
   useCreateApiKey,
@@ -14,8 +14,8 @@ import {
   useTestWebhook,
   useWebhookEvents,
   useWebhooks,
-} from '@/hooks/api'
-import { formatDateTime } from '@/lib/format'
+} from "@/hooks/api";
+import { formatDateTime } from "@/lib/format";
 
 /**
  * Connect any CRM: a key to call in, a signed webhook to be called back on.
@@ -29,11 +29,11 @@ export function IntegrationsCard() {
       <ApiKeys />
       <Webhooks />
     </div>
-  )
+  );
 }
 
 function CopyOnce({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState(false);
   return (
     <Alert tone="success">
       <p className="font-medium">{label}</p>
@@ -49,26 +49,26 @@ function CopyOnce({ label, value }: { label: string; value: string }) {
           variant="secondary"
           onClick={async () => {
             try {
-              await navigator.clipboard.writeText(value)
-              setCopied(true)
+              await navigator.clipboard.writeText(value);
+              setCopied(true);
             } catch {
               // Clipboard can be blocked; the value is on screen to select.
             }
           }}
         >
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? "Copied" : "Copy"}
         </Button>
       </div>
     </Alert>
-  )
+  );
 }
 
 function ApiKeys() {
-  const { data: keys } = useApiKeys()
-  const create = useCreateApiKey()
-  const revoke = useRevokeApiKey()
-  const [name, setName] = useState('')
-  const [fresh, setFresh] = useState<string | null>(null)
+  const { data: keys } = useApiKeys();
+  const create = useCreateApiKey();
+  const revoke = useRevokeApiKey();
+  const [name, setName] = useState("");
+  const [fresh, setFresh] = useState<string | null>(null);
 
   return (
     <Card
@@ -90,9 +90,11 @@ function ApiKeys() {
           <div className="self-end pb-[1.35rem]">
             <Button
               onClick={async () => {
-                const created = await create.mutateAsync(name.trim() || 'Untitled key')
-                setFresh(created.key)
-                setName('')
+                const created = await create.mutateAsync(
+                  name.trim() || "Untitled key",
+                );
+                setFresh(created.key);
+                setName("");
               }}
               loading={create.isPending}
               disabled={!name.trim()}
@@ -107,13 +109,20 @@ function ApiKeys() {
         ) : (
           <ul className="divide-y divide-ink-100 rounded-xl ring-1 ring-ink-200">
             {(keys ?? []).map((key) => (
-              <li key={key.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+              <li
+                key={key.id}
+                className="flex items-center gap-3 px-3 py-2.5 text-sm"
+              >
                 <span className="min-w-0 flex-1">
                   <span className="font-medium text-ink-900">{key.name}</span>
-                  <span className="ml-2 font-mono text-xs text-ink-400">{key.prefix}…</span>
+                  <span className="ml-2 font-mono text-xs text-ink-400">
+                    {key.prefix}…
+                  </span>
                 </span>
                 <span className="text-xs text-ink-500">
-                  {key.last_used_at ? `used ${formatDateTime(key.last_used_at)}` : 'never used'}
+                  {key.last_used_at
+                    ? `used ${formatDateTime(key.last_used_at)}`
+                    : "never used"}
                 </span>
                 {key.revoked_at ? (
                   <Badge value="revoked" tone="red" />
@@ -127,7 +136,7 @@ function ApiKeys() {
                           `Revoke "${key.name}"?\n\nAnything using this key stops working immediately.`,
                         )
                       ) {
-                        revoke.mutate(key.id)
+                        revoke.mutate(key.id);
                       }
                     }}
                   >
@@ -140,21 +149,21 @@ function ApiKeys() {
         )}
       </div>
     </Card>
-  )
+  );
 }
 
 function Webhooks() {
-  const { data: endpoints } = useWebhooks()
-  const { data: events } = useWebhookEvents()
-  const create = useCreateWebhook()
-  const remove = useDeleteWebhook()
-  const test = useTestWebhook()
+  const { data: endpoints } = useWebhooks();
+  const { data: events } = useWebhookEvents();
+  const create = useCreateWebhook();
+  const remove = useDeleteWebhook();
+  const test = useTestWebhook();
 
-  const [url, setUrl] = useState('')
-  const [chosen, setChosen] = useState<string[]>([])
-  const [secret, setSecret] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [note, setNote] = useState<string | null>(null)
+  const [url, setUrl] = useState("");
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [secret, setSecret] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   return (
     <Card
@@ -164,7 +173,9 @@ function Webhooks() {
       <div className="space-y-3">
         {error && <Alert tone="error">{error}</Alert>}
         {note && <Alert tone="info">{note}</Alert>}
-        {secret && <CopyOnce label="Signing secret for this webhook" value={secret} />}
+        {secret && (
+          <CopyOnce label="Signing secret for this webhook" value={secret} />
+        )}
 
         <Field
           label="Endpoint URL"
@@ -178,23 +189,27 @@ function Webhooks() {
           <p className="text-xs font-medium text-ink-600">Events</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {(events ?? []).map((event) => {
-              const on = chosen.includes(event)
+              const on = chosen.includes(event);
               return (
                 <button
                   key={event}
                   type="button"
                   onClick={() =>
-                    setChosen(on ? chosen.filter((x) => x !== event) : [...chosen, event])
+                    setChosen(
+                      on
+                        ? chosen.filter((x) => x !== event)
+                        : [...chosen, event],
+                    )
                   }
                   className={`rounded-lg px-2.5 py-1 text-2xs font-medium transition-colors ${
                     on
-                      ? 'bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200'
-                      : 'text-ink-500 ring-1 ring-inset ring-ink-200 hover:bg-ink-50'
+                      ? "bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200"
+                      : "text-ink-500 ring-1 ring-inset ring-ink-200 hover:bg-ink-50"
                   }`}
                 >
                   {event}
                 </button>
-              )
+              );
             })}
           </div>
           <p className="mt-1.5 text-xs text-ink-400">
@@ -204,15 +219,22 @@ function Webhooks() {
 
         <Button
           onClick={async () => {
-            setError(null)
-            setNote(null)
+            setError(null);
+            setNote(null);
             try {
-              const created = await create.mutateAsync({ url: url.trim(), events: chosen })
-              setSecret(created.secret)
-              setUrl('')
-              setChosen([])
+              const created = await create.mutateAsync({
+                url: url.trim(),
+                events: chosen,
+              });
+              setSecret(created.secret);
+              setUrl("");
+              setChosen([]);
             } catch (err) {
-              setError(err instanceof Error ? err.message : 'Could not add the webhook')
+              setError(
+                err instanceof Error
+                  ? err.message
+                  : "Could not add the webhook",
+              );
             }
           }}
           loading={create.isPending}
@@ -231,14 +253,14 @@ function Webhooks() {
                   <span className="min-w-0 flex-1 truncate font-medium text-ink-900">
                     {endpoint.url}
                   </span>
-                  <Badge value={endpoint.is_active ? 'active' : 'inactive'} />
+                  <Badge value={endpoint.is_active ? "active" : "inactive"} />
                   <Button
                     size="sm"
                     variant="secondary"
                     loading={test.isPending}
                     onClick={async () => {
-                      const result = await test.mutateAsync(endpoint.id)
-                      setNote(result.message)
+                      const result = await test.mutateAsync(endpoint.id);
+                      setNote(result.message);
                     }}
                   >
                     Send test
@@ -248,7 +270,7 @@ function Webhooks() {
                     variant="ghost"
                     onClick={() => {
                       if (confirm(`Delete this webhook?\n\n${endpoint.url}`)) {
-                        remove.mutate(endpoint.id)
+                        remove.mutate(endpoint.id);
                       }
                     }}
                   >
@@ -256,7 +278,9 @@ function Webhooks() {
                   </Button>
                 </div>
                 <p className="mt-1 text-xs text-ink-400">
-                  {endpoint.events.length ? endpoint.events.join(', ') : 'all events'}
+                  {endpoint.events.length
+                    ? endpoint.events.join(", ")
+                    : "all events"}
                   {endpoint.last_delivery_at &&
                     ` · last delivery ${formatDateTime(endpoint.last_delivery_at)}`}
                 </p>
@@ -271,5 +295,5 @@ function Webhooks() {
         )}
       </div>
     </Card>
-  )
+  );
 }

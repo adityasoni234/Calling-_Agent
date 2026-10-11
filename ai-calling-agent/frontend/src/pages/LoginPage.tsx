@@ -1,47 +1,50 @@
-import { type FormEvent, useState } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { type FormEvent, useState } from "react";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import { Alert } from '@/components/ui/Alert'
-import { Button } from '@/components/ui/Button'
-import { Field } from '@/components/ui/Field'
-import { ApiError, NetworkError } from '@/lib/api'
-import { selectIsAuthenticated, useAuthStore } from '@/stores/auth'
+import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { ApiError, NetworkError } from "@/lib/api";
+import { selectIsAuthenticated, useAuthStore } from "@/stores/auth";
 
 export function LoginPage() {
-  const login = useAuthStore((state) => state.login)
-  const isAuthenticated = useAuthStore(selectIsAuthenticated)
-  const navigate = useNavigate()
-  const location = useLocation()
+  const login = useAuthStore((state) => state.login);
+  const isAuthenticated = useAuthStore(selectIsAuthenticated);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [revealed, setRevealed] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [revealed, setRevealed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  if (isAuthenticated) return <Navigate to="/" replace />
+  if (isAuthenticated) return <Navigate to="/" replace />;
 
   const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    setError(null)
-    setSubmitting(true)
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
     try {
-      await login(email.trim(), password)
-      const from = (location.state as { from?: string } | null)?.from
-      navigate(from && from !== '/login' ? from : '/', { replace: true })
+      await login(email.trim(), password);
+      const from = (location.state as { from?: string } | null)?.from;
+      navigate(from && from !== "/login" ? from : "/", { replace: true });
     } catch (err) {
       setError(
         err instanceof ApiError || err instanceof NetworkError
           ? err.message
-          : 'Something went wrong. Try again.',
-      )
+          : "Something went wrong. Try again.",
+      );
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
-    <AuthShell title="Sign in" subtitle="Manage your AI calling agents, campaigns, and leads.">
+    <AuthShell
+      title="Sign in"
+      subtitle="Manage your AI calling agents, campaigns, and leads."
+    >
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {error && <Alert tone="error">{error}</Alert>}
 
@@ -59,7 +62,7 @@ export function LoginPage() {
         <div className="relative">
           <Field
             label="Password"
-            type={revealed ? 'text' : 'password'}
+            type={revealed ? "text" : "password"}
             autoComplete="current-password"
             required
             value={password}
@@ -68,10 +71,10 @@ export function LoginPage() {
           <button
             type="button"
             onClick={() => setRevealed((shown) => !shown)}
-            aria-label={revealed ? 'Hide password' : 'Show password'}
+            aria-label={revealed ? "Hide password" : "Show password"}
             className="absolute right-2.5 top-[1.9rem] rounded-lg px-2 py-1 text-2xs font-medium text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-700"
           >
-            {revealed ? 'Hide' : 'Show'}
+            {revealed ? "Hide" : "Show"}
           </button>
         </div>
 
@@ -81,13 +84,16 @@ export function LoginPage() {
       </form>
 
       <p className="mt-5 text-center text-sm text-ink-500">
-        No account yet?{' '}
-        <Link to="/register" className="font-medium text-brand-600 hover:text-brand-700">
+        No account yet?{" "}
+        <Link
+          to="/register"
+          className="font-medium text-brand-600 hover:text-brand-700"
+        >
           Create your organization
         </Link>
       </p>
     </AuthShell>
-  )
+  );
 }
 
 export function AuthShell({
@@ -95,9 +101,9 @@ export function AuthShell({
   subtitle,
   children,
 }: {
-  title: string
-  subtitle: string
-  children: React.ReactNode
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
 }) {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-ink-50 px-4 py-10">
@@ -113,14 +119,19 @@ export function AuthShell({
           <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-700 text-sm font-bold text-white">
             AC
           </span>
-          <h1 className="mt-5 text-[1.6rem] leading-tight text-ink-900">{title}</h1>
+          <h1 className="mt-5 text-[1.6rem] leading-tight text-ink-900">
+            {title}
+          </h1>
           <p className="mt-2 text-sm text-ink-500">{subtitle}</p>
         </div>
-        <div className="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-200/70">{children}</div>
+        <div className="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-200/70">
+          {children}
+        </div>
         <p className="mt-6 text-center text-2xs text-ink-400">
-          Calls are recorded where enabled. Comply with local calling regulations.
+          Calls are recorded where enabled. Comply with local calling
+          regulations.
         </p>
       </div>
     </div>
-  )
+  );
 }

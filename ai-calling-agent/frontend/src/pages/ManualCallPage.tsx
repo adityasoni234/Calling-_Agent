@@ -1,25 +1,25 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useState } from "react";
+import { Link } from "react-router-dom";
 
-import { Alert } from '@/components/ui/Alert'
-import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { PageHeader } from '@/components/ui/PageHeader'
-import { Field } from '@/components/ui/Field'
-import { EmptyState, Table } from '@/components/ui/Table'
-import { useBridgeCall, useCalls, useLeadLists, useLeads } from '@/hooks/api'
-import { ApiError, NetworkError } from '@/lib/api'
-import { formatDateTime, formatDuration } from '@/lib/format'
-import type { Call, Lead } from '@/types/api'
+import { Alert } from "@/components/ui/Alert";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Field } from "@/components/ui/Field";
+import { EmptyState, Table } from "@/components/ui/Table";
+import { useBridgeCall, useCalls, useLeadLists, useLeads } from "@/hooks/api";
+import { ApiError, NetworkError } from "@/lib/api";
+import { formatDateTime, formatDuration } from "@/lib/format";
+import type { Call, Lead } from "@/types/api";
 
-const STORAGE_KEY = 'operator_number'
+const STORAGE_KEY = "operator_number";
 
 function storedNumber(): string {
   try {
-    return localStorage.getItem(STORAGE_KEY) ?? ''
+    return localStorage.getItem(STORAGE_KEY) ?? "";
   } catch {
-    return ''
+    return "";
   }
 }
 
@@ -31,42 +31,44 @@ function storedNumber(): string {
  * lands in the same records, recordings and cost reporting as an AI call.
  */
 export function ManualCallPage() {
-  const [myNumber, setMyNumber] = useState(storedNumber)
-  const [search, setSearch] = useState('')
-  const [sheet, setSheet] = useState('')
-  const [manual, setManual] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [placed, setPlaced] = useState<Call | null>(null)
+  const [myNumber, setMyNumber] = useState(storedNumber);
+  const [search, setSearch] = useState("");
+  const [sheet, setSheet] = useState("");
+  const [manual, setManual] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [placed, setPlaced] = useState<Call | null>(null);
 
-  const { data: sheets } = useLeadLists()
+  const { data: sheets } = useLeadLists();
   const { data: leads, isLoading } = useLeads({
     page: 1,
     search: search || undefined,
     list_id: sheet || undefined,
-  })
-  const { data: history } = useCalls({ page: 1, mode: 'human' })
-  const bridge = useBridgeCall()
+  });
+  const { data: history } = useCalls({ page: 1, mode: "human" });
+  const bridge = useBridgeCall();
 
-  const ready = myNumber.trim().length >= 6
+  const ready = myNumber.trim().length >= 6;
 
   const call = async (body: { lead_id?: string; to_number?: string }) => {
-    setError(null)
-    setPlaced(null)
+    setError(null);
+    setPlaced(null);
     try {
-      localStorage.setItem(STORAGE_KEY, myNumber.trim())
+      localStorage.setItem(STORAGE_KEY, myNumber.trim());
     } catch {
       // A browser that blocks storage must not block the call.
     }
     try {
-      setPlaced(await bridge.mutateAsync({ operator_number: myNumber.trim(), ...body }))
+      setPlaced(
+        await bridge.mutateAsync({ operator_number: myNumber.trim(), ...body }),
+      );
     } catch (err) {
       setError(
         err instanceof ApiError || err instanceof NetworkError
           ? err.message
-          : 'Could not start the call',
-      )
+          : "Could not start the call",
+      );
     }
-  }
+  };
 
   return (
     <div className="space-y-5">
@@ -78,9 +80,9 @@ export function ManualCallPage() {
       {error && <Alert tone="error">{error}</Alert>}
       {placed && (
         <Alert tone="success">
-          Calling <span className="font-medium tabular-nums">{myNumber}</span> now — answer it and
-          you will be connected to{' '}
-          <span className="font-medium tabular-nums">{placed.to_number}</span>.{' '}
+          Calling <span className="font-medium tabular-nums">{myNumber}</span>{" "}
+          now — answer it and you will be connected to{" "}
+          <span className="font-medium tabular-nums">{placed.to_number}</span>.{" "}
           <Link to={`/calls/${placed.id}`} className="font-medium underline">
             Open the call
           </Link>
@@ -101,12 +103,15 @@ export function ManualCallPage() {
             hint="Include the country code. Your phone rings first, so the lead's phone only rings once you are actually on the line."
           />
           <div className="pb-[1.35rem]">
-            <Badge value={ready ? 'ready' : 'pending'} />
+            <Badge value={ready ? "ready" : "pending"} />
           </div>
         </div>
       </Card>
 
-      <Card title="Dial a number" description="Anyone, whether or not they are in your leads.">
+      <Card
+        title="Dial a number"
+        description="Anyone, whether or not they are in your leads."
+      >
         <div className="flex flex-wrap items-end gap-3">
           <Field
             label="Number to call"
@@ -126,7 +131,9 @@ export function ManualCallPage() {
           </div>
         </div>
         {!ready && (
-          <p className="mt-1 text-xs text-amber-700">Enter your own number above first.</p>
+          <p className="mt-1 text-xs text-amber-700">
+            Enter your own number above first.
+          </p>
         )}
       </Card>
 
@@ -144,7 +151,11 @@ export function ManualCallPage() {
           />
           {(sheets ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1">
-              <SheetChip label="All leads" selected={!sheet} onClick={() => setSheet('')} />
+              <SheetChip
+                label="All leads"
+                selected={!sheet}
+                onClick={() => setSheet("")}
+              />
               {(sheets ?? []).map((item) => (
                 <SheetChip
                   key={item.id}
@@ -161,17 +172,28 @@ export function ManualCallPage() {
           {isLoading ? (
             <p className="py-8 text-center text-sm text-ink-500">Loading…</p>
           ) : !leads?.items.length ? (
-            <EmptyState title="No leads match" hint="Try a different search or sheet." />
+            <EmptyState
+              title="No leads match"
+              hint="Try a different search or sheet."
+            />
           ) : (
-            <Table headers={['Lead', 'Phone', 'Status', 'Calls', 'Last called', '']}>
+            <Table
+              headers={["Lead", "Phone", "Status", "Calls", "Last called", ""]}
+            >
               {leads.items.map((lead: Lead) => (
                 <tr key={lead.id} className="hover:bg-ink-50">
-                  <td className="py-2.5 pl-5 pr-3 font-medium text-ink-900">{lead.name}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-ink-600">{lead.phone_number}</td>
+                  <td className="py-2.5 pl-5 pr-3 font-medium text-ink-900">
+                    {lead.name}
+                  </td>
+                  <td className="px-3 py-2.5 tabular-nums text-ink-600">
+                    {lead.phone_number}
+                  </td>
                   <td className="px-3 py-2.5">
                     <Badge value={lead.status} />
                   </td>
-                  <td className="px-3 py-2.5 tabular-nums text-ink-600">{lead.call_count}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-ink-600">
+                    {lead.call_count}
+                  </td>
                   <td className="px-3 py-2.5 text-xs text-ink-500">
                     {formatDateTime(lead.last_called_at)}
                   </td>
@@ -179,10 +201,10 @@ export function ManualCallPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      disabled={!ready || lead.status === 'do_not_call'}
+                      disabled={!ready || lead.status === "do_not_call"}
                       onClick={() => call({ lead_id: lead.id })}
                     >
-                      {lead.status === 'do_not_call' ? 'Do not call' : 'Call'}
+                      {lead.status === "do_not_call" ? "Do not call" : "Call"}
                     </Button>
                   </td>
                 </tr>
@@ -192,7 +214,11 @@ export function ManualCallPage() {
         </div>
       </Card>
 
-      <Card title="Your recent calls" description="Calls you placed yourself, not the agent's." flush>
+      <Card
+        title="Your recent calls"
+        description="Calls you placed yourself, not the agent's."
+        flush
+      >
         <div className="px-5 pb-4 pt-4">
           {!history?.items.length ? (
             <EmptyState
@@ -200,10 +226,12 @@ export function ManualCallPage() {
               hint="Calls you place from this page appear here with their recording and cost."
             />
           ) : (
-            <Table headers={['To', 'Status', 'Duration', 'Cost', 'When', '']}>
+            <Table headers={["To", "Status", "Duration", "Cost", "When", ""]}>
               {history.items.map((row) => (
                 <tr key={row.id} className="hover:bg-ink-50">
-                  <td className="py-2.5 pl-5 pr-3 tabular-nums text-ink-800">{row.to_number}</td>
+                  <td className="py-2.5 pl-5 pr-3 tabular-nums text-ink-800">
+                    {row.to_number}
+                  </td>
                   <td className="px-3 py-2.5">
                     <Badge value={row.status} />
                   </td>
@@ -211,7 +239,7 @@ export function ManualCallPage() {
                     {formatDuration(row.duration_seconds)}
                   </td>
                   <td className="px-3 py-2.5 tabular-nums text-ink-600">
-                    {row.cost_incomplete ? '—' : `$${row.cost_usd.toFixed(3)}`}
+                    {row.cost_incomplete ? "—" : `$${row.cost_usd.toFixed(3)}`}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-ink-500">
                     {formatDateTime(row.started_at)}
@@ -231,7 +259,7 @@ export function ManualCallPage() {
         </div>
       </Card>
     </div>
-  )
+  );
 }
 
 function SheetChip({
@@ -239,9 +267,9 @@ function SheetChip({
   selected,
   onClick,
 }: {
-  label: string
-  selected: boolean
-  onClick: () => void
+  label: string;
+  selected: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
@@ -250,11 +278,11 @@ function SheetChip({
       title={label}
       className={`max-w-48 truncate rounded-lg px-2.5 py-1 text-2xs font-medium transition-colors ${
         selected
-          ? 'bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200'
-          : 'text-ink-500 hover:bg-ink-100 hover:text-ink-800'
+          ? "bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200"
+          : "text-ink-500 hover:bg-ink-100 hover:text-ink-800"
       }`}
     >
       {label}
     </button>
-  )
+  );
 }

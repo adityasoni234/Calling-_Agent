@@ -22,7 +22,7 @@ import type { Checkout, CreditPackage } from "@/types/api";
 /**
  * Credits and payments.
  *
- * One credit is 10 paise of list price. Calls are billed cost-plus rather
+ * One credit is one US cent of list price. Calls are billed cost-plus rather
  * than at a flat per-minute rate, because a call to the UK costs six times
  * one to India and a single flat price cannot serve both honestly. The page leads with
  * what is spendable rather than the raw balance: money held against calls
@@ -110,7 +110,7 @@ export function BillingPage() {
 
       <Card
         title="Top up"
-        description="Prices include GST. Credits never expire unless a package says otherwise."
+        description="Credits never expire unless a package says otherwise. Any tax is added at checkout."
       >
         {packages.isPending ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -134,10 +134,12 @@ export function BillingPage() {
                 <p className="mt-3 font-display text-[1.75rem] leading-none tabular-nums text-ink-900">
                   {formatMinor(pkg.payable_minor, pkg.currency)}
                 </p>
-                <p className="mt-1.5 text-2xs text-ink-400">
-                  {formatMinor(pkg.price_minor, pkg.currency)} +{" "}
-                  {formatMinor(pkg.tax_minor, pkg.currency)} tax
-                </p>
+                {pkg.tax_minor > 0 && (
+                  <p className="mt-1.5 text-2xs text-ink-400">
+                    {formatMinor(pkg.price_minor, pkg.currency)} +{" "}
+                    {formatMinor(pkg.tax_minor, pkg.currency)} tax
+                  </p>
+                )}
                 <p className="mt-4 text-sm tabular-nums text-ink-700">
                   {formatCredits(pkg.total_credits)} credits
                 </p>

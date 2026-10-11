@@ -1,13 +1,13 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from "react";
 
 interface CardProps {
-  title?: string
-  description?: string
-  actions?: ReactNode
-  children: ReactNode
-  className?: string
+  title?: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string;
   /** Removes the body padding — for tables that should reach the card edge. */
-  flush?: boolean
+  flush?: boolean;
 }
 
 export function Card({
@@ -15,7 +15,7 @@ export function Card({
   description,
   actions,
   children,
-  className = '',
+  className = "",
   flush = false,
 }: CardProps) {
   return (
@@ -27,13 +27,15 @@ export function Card({
           <div className="min-w-0">
             {title && <h2 className="text-base text-ink-900">{title}</h2>}
             {description && (
-              <p className="mt-1.5 max-w-xl text-xs leading-relaxed text-ink-500">{description}</p>
+              <p className="mt-1.5 max-w-xl text-xs leading-relaxed text-ink-500">
+                {description}
+              </p>
             )}
           </div>
           {actions && <div className="shrink-0">{actions}</div>}
         </header>
       )}
-      <div className={flush ? '' : 'px-6 py-5'}>{children}</div>
+      <div className={flush ? "" : "px-6 py-5"}>{children}</div>
     </section>
-  )
+  );
 }

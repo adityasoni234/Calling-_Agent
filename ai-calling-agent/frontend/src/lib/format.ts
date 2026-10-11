@@ -30,15 +30,21 @@ export function initials(name: string): string {
 }
 
 /**
- * Money that arrived as integer minor units (paise, cents).
+ * Money that arrived as integer minor units (cents).
  *
  * The backend never sends a float for money, so the division belongs here --
  * exactly once -- rather than at each of the places that display a price.
+ * The currency comes from the row being displayed, never from a default
+ * guess: a package priced in USD rendered with a rupee sign is a support
+ * ticket, and one rendered the other way is a refund.
  */
-export function formatMinor(minor: number, currency = "INR"): string {
+export function formatMinor(minor: number, currency = "USD"): string {
   return new Intl.NumberFormat(undefined, {
     style: "currency",
     currency,
+    // Without this, a non-US locale renders USD as "US$5.00". The audience
+    // for a price tag already knows which currency they are being quoted.
+    currencyDisplay: "narrowSymbol",
     maximumFractionDigits: 2,
   }).format(minor / 100);
 }

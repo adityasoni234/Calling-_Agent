@@ -61,16 +61,16 @@ def test_every_call_is_sold_above_what_it_cost_us(db_session) -> None:
     """The regression that made the whole platform lose money.
 
     Credits were defined in US cents while packages were priced in rupees and
-    nothing converted between them, so a minute costing Rs10 was sold for Rs2.
-    This asserts the two units meet: the rupees a call earns must exceed the
-    rupees it cost, by the configured markup.
+    nothing converted between them, so a minute costing $0.11 was sold for
+    $0.02. Credits are USD again and the packages carry the correction, so
+    this asserts the two units meet: what a call earns must exceed what it
+    cost, by the configured markup.
     """
     billing = BillingService(db_session)
     for cost_usd in (0.02, 0.05, 0.1147, 0.45):
-        cost_inr = cost_usd * settings.usd_inr_rate
-        earned_inr = BillingService.rupees(billing.credits_for(cost_usd))
-        assert earned_inr > cost_inr, f"${cost_usd} sells for less than it costs"
-        assert earned_inr == pytest.approx(cost_inr * settings.credit_markup_multiplier, rel=0.01)
+        earned = BillingService.usd(billing.credits_for(cost_usd))
+        assert earned > cost_usd, f"${cost_usd} sells for less than it costs"
+        assert earned == pytest.approx(cost_usd * settings.credit_markup_multiplier, rel=0.01)
 
 
 def test_a_cheaper_carrier_lowers_the_price_and_keeps_the_margin(db_session) -> None:
@@ -82,8 +82,8 @@ def test_a_cheaper_carrier_lowers_the_price_and_keeps_the_margin(db_session) -> 
     assert cheap < dear  # the customer pays less
 
     def margin(credits: float, cost_usd: float) -> float:
-        earned = BillingService.rupees(credits)
-        return (earned - cost_usd * settings.usd_inr_rate) / earned
+        earned = BillingService.usd(credits)
+        return (earned - cost_usd) / earned
 
     assert margin(cheap, domestic_minute) == pytest.approx(margin(dear, twilio_minute), rel=0.01)
 

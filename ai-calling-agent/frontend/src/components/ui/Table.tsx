@@ -1,6 +1,12 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from "react";
 
-export function Table({ headers, children }: { headers: string[]; children: ReactNode }) {
+export function Table({
+  headers,
+  children,
+}: {
+  headers: string[];
+  children: ReactNode;
+}) {
   return (
     <div className="-mx-5 overflow-x-auto">
       <table className="min-w-full text-sm">
@@ -10,7 +16,7 @@ export function Table({ headers, children }: { headers: string[]; children: Reac
               <th
                 key={header || index}
                 className={`whitespace-nowrap py-3 text-2xs font-medium uppercase tracking-[0.1em] text-ink-400 ${
-                  index === 0 ? 'pl-5 pr-3' : 'px-3'
+                  index === 0 ? "pl-5 pr-3" : "px-3"
                 }`}
               >
                 {header}
@@ -21,7 +27,7 @@ export function Table({ headers, children }: { headers: string[]; children: Reac
         <tbody className="divide-y divide-ink-200/60">{children}</tbody>
       </table>
     </div>
-  )
+  );
 }
 
 export function EmptyState({
@@ -29,10 +35,10 @@ export function EmptyState({
   hint,
   action,
 }: {
-  title: string
-  hint?: string
+  title: string;
+  hint?: string;
   /** Where to go next. An empty screen with no way forward is a dead end. */
-  action?: ReactNode
+  action?: ReactNode;
 }) {
   return (
     <div className="py-16 text-center">
@@ -50,10 +56,14 @@ export function EmptyState({
         </svg>
       </div>
       <p className="text-sm font-medium text-ink-800">{title}</p>
-      {hint && <p className="mx-auto mt-1.5 max-w-sm text-xs leading-relaxed text-ink-500">{hint}</p>}
+      {hint && (
+        <p className="mx-auto mt-1.5 max-w-sm text-xs leading-relaxed text-ink-500">
+          {hint}
+        </p>
+      )}
       {action && <div className="mt-4 flex justify-center gap-2">{action}</div>}
     </div>
-  )
+  );
 }
 
 export function Pager({
@@ -62,16 +72,17 @@ export function Pager({
   total,
   onChange,
 }: {
-  page: number
-  pages: number
-  total: number
-  onChange: (page: number) => void
+  page: number;
+  pages: number;
+  total: number;
+  onChange: (page: number) => void;
 }) {
-  if (total === 0) return null
+  if (total === 0) return null;
   return (
     <div className="flex items-center justify-between pt-4 text-xs text-ink-500">
       <span>
-        Page {page} of {Math.max(pages, 1)} · <span className="tabular-nums">{total}</span> total
+        Page {page} of {Math.max(pages, 1)} ·{" "}
+        <span className="tabular-nums">{total}</span> total
       </span>
       <div className="flex gap-2">
         <button
@@ -92,5 +103,5 @@ export function Pager({
         </button>
       </div>
     </div>
-  )
+  );
 }

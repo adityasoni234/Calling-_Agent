@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.money import to_decimal
 from app.models.billing import CreditEntry, CreditEntryKind
 from app.models.call import Call
 from app.models.organization import Organization
@@ -26,21 +28,21 @@ from app.models.reservation import CreditReservation, ReservationStatus
 
 log = get_logger(__name__)
 
-#: One credit == 10 paise (Rs0.10) of list price.
+#: One credit == one US cent of list price.
 #:
-#: Credits used to be defined as US cents while packages were priced in rupees,
-#: with nothing converting between them. Rs999 bought 11,000 credits, which at
-#: one US cent each was Rs9,680 of value -- every minute sold at a loss. The
-#: unit is now the currency we actually invoice in, and `usd_inr_rate` does the
-#: conversion from provider invoices in one documented place.
+#: USD is the commercial currency of the platform: provider invoices arrive in
+#: it, prices are published in it, and margin is reported in it. Credits are a
+#: prepaid wallet denominated in the same unit, so a balance is readable as
+#: money without a conversion in anyone's head.
 #:
-#: Rs0.10 rather than Rs1 keeps per-call charges as whole-ish numbers instead of
-#: two decimal places, and keeps the existing package sizes (Rs999 -> ~10,000
-#: credits) intact.
-CREDITS_PER_INR = 10.0
-#: Charged even for a call that connects and ends immediately: the carrier bills
-#: us for the whole first minute, so a free zero-second call is a real loss.
-MINIMUM_CALL_CREDITS = 10.0
+#: This was briefly INR, which fixed a real bug -- credits were being sold at
+#: a tenth of their cost basis -- by moving the unit instead of the prices.
+#: Pricing is now set by the price book in USD, so the unit returns to USD and
+#: the packages carry the correction instead.
+CREDITS_PER_USD = 100.0
+#: Charged even for a call that connects and ends immediately: the carrier
+#: bills us for the whole first minute, so a free zero-second call is a loss.
+MINIMUM_CALL_CREDITS = 1.0
 #: What we hold before dialling, as minutes of a typical call. Generous on
 #: purpose: a hold that runs out mid-conversation is worse than one that ties
 #: up a few credits for ninety seconds.
@@ -89,25 +91,26 @@ class BillingService:
         return float(total or 0.0)
 
     def credits_for(self, cost_usd: float) -> float:
-        """What we charge for a call that cost us `cost_usd`.
+        """Fallback pricing for a call with no published price rule.
 
-        Cost-plus, not a flat per-minute price: telephony to the UK costs six
-        times India, and one flat price would either lose money on one or be
-        uncompetitive on the other. Because the markup rides on measured cost,
-        the margin holds by construction -- switching to a cheaper carrier
-        lowers the customer's price and leaves the percentage untouched.
-
-        Provider costs arrive in USD and we sell in INR, so the conversion
-        happens here, once.
+        Cost-plus on measured provider cost. The price book is the real
+        pricing path -- see `charge_for_call` -- but a tenant whose plan has
+        no rule for a destination must still be billed something defensible
+        rather than nothing.
         """
-        cost_inr = cost_usd * settings.usd_inr_rate
-        marked_up = cost_inr * settings.credit_markup_multiplier
-        return max(MINIMUM_CALL_CREDITS, round(marked_up * CREDITS_PER_INR, 2))
+        marked_up = cost_usd * settings.credit_markup_multiplier
+        return max(MINIMUM_CALL_CREDITS, round(marked_up * CREDITS_PER_USD, 2))
 
     @staticmethod
-    def rupees(credits: float) -> float:
-        """List-price value of some credits, in rupees."""
-        return round(credits / CREDITS_PER_INR, 2)
+    def credits_for_charge(charge_usd: Decimal | float) -> float:
+        """Convert a price-book charge in USD into credits."""
+        credits = float(to_decimal(charge_usd)) * CREDITS_PER_USD
+        return max(MINIMUM_CALL_CREDITS, round(credits, 2))
+
+    @staticmethod
+    def usd(credits: float) -> float:
+        """List-price value of some credits, in USD."""
+        return round(credits / CREDITS_PER_USD, 4)
 
     async def held_credits(self, organization_id: uuid.UUID) -> float:
         """Credits set aside for calls currently in flight."""
@@ -343,7 +346,26 @@ class BillingService:
         if organization is None:
             return None
 
-        credits = self.credits_for(call.cost_usd or 0.0)
+        # The price book decides what a customer pays. credits_for() is the
+        # fallback for a destination the book has no rule for -- a tenant
+        # must still be billed something defensible rather than nothing.
+        from app.models.price_book import Billable
+        from app.services.pricing_engine import PricingEngine
+
+        quote = await PricingEngine(self.db).quote(
+            billable=Billable.VOICE_OUTBOUND
+            if str(call.direction) == "outbound"
+            else Billable.VOICE_INBOUND,
+            organization_id=call.organization_id,
+            region=getattr(call, "region", None),
+            seconds=call.duration_seconds,
+            provider_cost=to_decimal(call.cost_usd or 0.0),
+            cost_incomplete=bool(getattr(call, "cost_incomplete", False)),
+        )
+        if quote.source == "unpriced":
+            credits = self.credits_for(call.cost_usd or 0.0)
+        else:
+            credits = self.credits_for_charge(quote.charge)
 
         # Settle the hold: the charge below is the real cost, so whatever was
         # held above it goes back automatically when the hold closes.

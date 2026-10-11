@@ -20,7 +20,7 @@ import type { AdminPackage, AdminPackageWrite } from "@/types/api";
 /**
  * What customers can buy.
  *
- * Prices are entered in rupees and paise here but stored as integer minor
+ * Prices are entered in dollars and cents here but stored as integer minor
  * units, because float arithmetic on money eventually produces a bill nobody
  * can reconcile. Tax is basis points for the same reason: 18% is 1800.
  */
@@ -30,7 +30,7 @@ const BLANK: AdminPackageWrite = {
   slug: "",
   description: "",
   price_minor: 0,
-  currency: "INR",
+  currency: "USD",
   tax_bps: 1800,
   base_credits: 0,
   bonus_credits: 0,
@@ -39,15 +39,15 @@ const BLANK: AdminPackageWrite = {
   display_order: 0,
 };
 
-const rupees = (minor: number) => (minor / 100).toFixed(2);
-const money = (minor: number, currency: string) =>
-  `${currency === "INR" ? "₹" : `${currency} `}${(minor / 100).toLocaleString(
-    undefined,
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    },
-  )}`;
+/** Minor units as a plain decimal, for the price input's value. */
+const majorUnits = (minor: number) => (minor / 100).toFixed(2);
+const money = (minor: number, currency = "USD") =>
+  new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(minor / 100);
 
 function slugify(name: string): string {
   return name
@@ -123,7 +123,7 @@ export function Packages() {
     "block text-[0.65rem] font-medium uppercase tracking-[0.1em] text-slate-500";
 
   // Shown live while editing, so the operator sees the price a customer sees.
-  const currency = draft?.currency ?? "INR";
+  const currency = draft?.currency ?? "USD";
   const previewTax = draft
     ? Math.round((draft.price_minor * (draft.tax_bps ?? 0)) / 10_000)
     : 0;
@@ -148,7 +148,7 @@ export function Packages() {
         />
         <Metric
           label="Lifetime revenue"
-          value={money(revenue, "INR")}
+          value={money(revenue)}
           sub="Paid orders, before refunds"
           tone="good"
         />
@@ -161,7 +161,7 @@ export function Packages() {
       {draft && (
         <Panel
           title={editing ? `Edit ${editing.name}` : "New package"}
-          description="Price in rupees, credits as whole numbers. One credit is 10 paise of list price."
+          description="Price in dollars, credits as whole numbers. One credit is one US cent of list price."
         >
           <div className="space-y-4 px-4 py-4">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -228,7 +228,7 @@ export function Packages() {
                   step="0.01"
                   min="0"
                   className={`mt-1 ${input} tabular-nums`}
-                  value={rupees(draft.price_minor)}
+                  value={majorUnits(draft.price_minor)}
                   onChange={(e) =>
                     field(
                       "price_minor",

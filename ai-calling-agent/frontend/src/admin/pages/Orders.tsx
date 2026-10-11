@@ -33,13 +33,13 @@ const FILTERS = [
   { key: "refunded", label: "Refunded" },
 ] as const;
 
-const money = (minor: number, currency: string) =>
-  `${currency === "INR" ? "₹" : `${currency} `}${(minor / 100).toLocaleString(
-    undefined,
-    {
-      minimumFractionDigits: 2,
-    },
-  )}`;
+const money = (minor: number, currency = "USD") =>
+  new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(minor / 100);
 
 const when = (value: string | null) =>
   value
@@ -129,10 +129,10 @@ export function Orders() {
           value={String(paid.length)}
           sub={`${rows.length} shown`}
         />
-        <Metric label="Revenue" value={money(revenue, "INR")} tone="good" />
+        <Metric label="Revenue" value={money(revenue)} tone="good" />
         <Metric
           label="Refunded"
-          value={money(refunded, "INR")}
+          value={money(refunded)}
           tone={refunded > 0 ? "bad" : "neutral"}
         />
         <Metric

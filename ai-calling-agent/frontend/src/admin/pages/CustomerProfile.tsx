@@ -21,8 +21,8 @@ const when = (value: string | null | undefined) =>
       })
     : "—";
 
-const rupees = (minor: number) =>
-  `₹${(minor / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+const dollars = (minor: number) =>
+  `$${(minor / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
 /** Pressing a button to launch an AI is a manual call placed in agent mode. */
 const BACKFILLED = "backfilled:";
@@ -125,9 +125,9 @@ export function CustomerProfile() {
         />
         <Metric
           label="Paid us"
-          value={rupees(p.paid_minor)}
+          value={dollars(p.paid_minor)}
           sub={`${p.paid_orders} order${p.paid_orders === 1 ? "" : "s"}${
-            p.refunded_minor ? ` · ${rupees(p.refunded_minor)} refunded` : ""
+            p.refunded_minor ? ` · ${dollars(p.refunded_minor)} refunded` : ""
           }`}
           tone="good"
         />
@@ -388,7 +388,7 @@ export function CustomerProfile() {
                   </td>
                   <td className="px-3">{order.package_name}</td>
                   <td className="whitespace-nowrap px-3 tabular-nums">
-                    {rupees(order.total_minor)}
+                    {dollars(order.total_minor)}
                   </td>
                   <td className="px-3">
                     <div className="flex gap-1">

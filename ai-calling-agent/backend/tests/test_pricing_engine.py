@@ -301,3 +301,88 @@ def test_money_never_goes_through_a_float() -> None:
     """0.1 + 0.2 == 0.30000000000000004 is why this module exists."""
     assert quantize_money(0.1) + quantize_money(0.2) == Decimal("0.30")
     assert quantize_money("0.005") == Decimal("0.01")  # half-up, not bankers'
+
+
+# --- call settlement --------------------------------------------------
+
+
+async def test_a_finished_call_bills_through_the_price_book(db_session, auth_headers) -> None:
+    """The engine has to be wired in, not merely written.
+
+    A 17-second call on the $0.13 standard tier bills a whole minute: $0.13,
+    which is 13 credits. Not the cost-plus fallback.
+    """
+    from app.models.call import Call, CallStatus
+    from app.services.billing_service import BillingService
+
+    org = await _org(db_session)
+    await _book(db_session, rate="0.13")
+
+    call = Call(
+        organization_id=org.id,
+        direction="outbound",
+        provider="mock",
+        from_number="+10000000000",
+        to_number="+919876543210",
+        status=CallStatus.COMPLETED,
+        duration_seconds=17,
+        cost_usd=0.0555,
+    )
+    db_session.add(call)
+    await db_session.commit()
+
+    entry = await BillingService(db_session).charge_for_call(call)
+    assert entry is not None
+    assert entry.amount == -13.0  # $0.13 at 100 credits per dollar
+
+
+async def test_a_destination_with_no_rule_still_bills_something_defensible(
+    db_session, auth_headers
+) -> None:
+    """Falling back to cost-plus beats billing nothing."""
+    from app.models.call import Call, CallStatus
+    from app.services.billing_service import BillingService
+
+    org = await _org(db_session)  # no price book at all
+    call = Call(
+        organization_id=org.id,
+        direction="outbound",
+        provider="mock",
+        from_number="+10000000000",
+        to_number="+919876543210",
+        status=CallStatus.COMPLETED,
+        duration_seconds=60,
+        cost_usd=0.0555,
+    )
+    db_session.add(call)
+    await db_session.commit()
+
+    entry = await BillingService(db_session).charge_for_call(call)
+    assert entry is not None
+    assert entry.amount < 0  # billed, not free
+    assert abs(entry.amount) > 0.0555 * 100  # above cost
+
+
+async def test_a_call_is_never_billed_twice(db_session, auth_headers) -> None:
+    """Post-call processing can be re-run; double-charging would be the worst bug."""
+    from app.models.call import Call, CallStatus
+    from app.services.billing_service import BillingService
+
+    org = await _org(db_session)
+    await _book(db_session, rate="0.13")
+    call = Call(
+        organization_id=org.id,
+        direction="outbound",
+        provider="mock",
+        from_number="+10000000000",
+        to_number="+919876543210",
+        status=CallStatus.COMPLETED,
+        duration_seconds=60,
+        cost_usd=0.0555,
+    )
+    db_session.add(call)
+    await db_session.commit()
+
+    billing = BillingService(db_session)
+    assert await billing.charge_for_call(call) is not None
+    assert await billing.charge_for_call(call) is None

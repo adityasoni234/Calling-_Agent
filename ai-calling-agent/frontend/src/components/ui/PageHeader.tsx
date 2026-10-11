@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from "react";
 
 interface PageHeaderProps {
-  title: string
+  title: string;
   /** One line saying what this screen is for. Every page has one. */
-  description?: string
-  actions?: ReactNode
+  description?: string;
+  actions?: ReactNode;
 }
 
 /**
@@ -20,10 +20,14 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
       <div className="min-w-0">
         <h1 className="text-[1.75rem] leading-tight text-ink-900">{title}</h1>
         {description && (
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-500">{description}</p>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-500">
+            {description}
+          </p>
         )}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>
+      )}
     </header>
-  )
+  );
 }

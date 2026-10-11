@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 class OrganizationSummary(BaseModel):
@@ -284,3 +285,72 @@ class ProviderHealth(BaseModel):
     ok: bool
     detail: str
     checked_at: datetime
+
+
+class PriceRuleRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    billable: str
+    region: str | None
+    rate_kind: str
+    rate: Decimal
+    fixed_fee: Decimal | None
+    minimum_charge: Decimal | None
+    rounding: str
+    increment_seconds: int
+    assumed_cost: Decimal | None
+    notes: str | None
+
+    @field_serializer("rate", "fixed_fee", "minimum_charge", "assumed_cost")
+    def _as_string(self, value: Decimal | None) -> str | None:
+        # A JSON number is a float. Money is not.
+        return None if value is None else str(value)
+
+    @property
+    def margin_percent(self) -> Decimal | None:
+        if self.assumed_cost is None or self.rate <= 0:
+            return None
+        return (self.rate - self.assumed_cost) / self.rate * 100
+
+
+class PriceBookRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    slug: str
+    name: str
+    description: str | None
+    version: int
+    status: str
+    currency: str
+    organization_id: uuid.UUID | None
+    is_default: bool
+    effective_from: datetime | None
+    published_at: datetime | None
+    below_cost_reason: str | None
+    created_at: datetime
+    rules: list[PriceRuleRead] = []
+    #: Rules priced under their own recorded cost. Empty is the normal state.
+    below_cost: list[str] = []
+
+
+class PriceRuleWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    billable: str
+    region: str | None = None
+    rate_kind: str = "per_minute"
+    rate: Decimal = Field(ge=0)
+    minimum_charge: Decimal | None = None
+    assumed_cost: Decimal | None = None
+    increment_seconds: int = Field(default=60, ge=1, le=600)
+    notes: str | None = Field(default=None, max_length=500)
+
+
+class PublishRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: Required only when a rule prices below its recorded cost. Selling at a
+    #: loss should be a decision someone signed, not an accident.
+    override_reason: str | None = Field(default=None, max_length=1000)

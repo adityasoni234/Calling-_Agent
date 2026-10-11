@@ -8,6 +8,7 @@ import { CustomerProfile } from "@/admin/pages/CustomerProfile";
 import { Customers } from "@/admin/pages/Customers";
 import { Orders } from "@/admin/pages/Orders";
 import { Packages } from "@/admin/pages/Packages";
+import { Pricing } from "@/admin/pages/Pricing";
 import { Providers } from "@/admin/pages/Providers";
 import { Overview } from "@/admin/pages/Overview";
 import { Users } from "@/admin/pages/Users";
@@ -39,6 +40,7 @@ export default function AdminApp() {
             <Route path="/packages" element={<Packages />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/providers" element={<Providers />} />
+            <Route path="/pricing" element={<Pricing />} />
             <Route path="/users" element={<Users />} />
             <Route path="/activity" element={<Activity />} />
           </Route>

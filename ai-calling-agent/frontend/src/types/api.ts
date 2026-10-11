@@ -911,3 +911,36 @@ export interface MessageCampaign {
   percent_complete: number;
   remaining: number;
 }
+
+export interface PriceRule {
+  id: string;
+  billable: string;
+  region: string | null;
+  rate_kind: string;
+  rate: string;
+  fixed_fee: string | null;
+  minimum_charge: string | null;
+  rounding: string;
+  increment_seconds: number;
+  assumed_cost: string | null;
+  notes: string | null;
+}
+
+export interface PriceBook {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  version: number;
+  status: string;
+  currency: string;
+  organization_id: string | null;
+  is_default: boolean;
+  effective_from: string | null;
+  published_at: string | null;
+  below_cost_reason: string | null;
+  created_at: string;
+  rules: PriceRule[];
+  /** Billables priced under their own recorded cost. Empty is normal. */
+  below_cost: string[];
+}

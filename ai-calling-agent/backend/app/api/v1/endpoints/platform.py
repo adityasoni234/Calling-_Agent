@@ -15,12 +15,13 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select
 
 from app.api.deps import DbSession, PlatformAdmin
-from app.core.errors import NotFoundError, ValidationFailedError
+from app.core.errors import AppError, NotFoundError, ValidationFailedError
 from app.models.agent import Agent
 from app.models.billing import CreditEntry, CreditEntryKind, PlatformEvent
 from app.models.call import Call, CallStatus
 from app.models.organization import Organization
 from app.models.package import CreditPackage, Order, OrderStatus
+from app.models.price_book import PriceBook, PriceBookStatus, PriceRule
 from app.models.user import User
 from app.schemas.common import MessageResponse
 from app.schemas.platform import (
@@ -35,14 +36,19 @@ from app.schemas.platform import (
     PlatformEventRead,
     PlatformOverview,
     PlatformUserRead,
+    PriceBookRead,
+    PriceRuleRead,
+    PriceRuleWrite,
     ProviderConnectionRead,
     ProviderHealth,
     ProviderWrite,
+    PublishRequest,
     SuspendRequest,
     UserProfile,
 )
 from app.services.billing_service import BillingService, spend_total
 from app.services.order_service import OrderService
+from app.services.pricing_engine import BelowCost, PricingEngine
 from app.services.provider_service import PROVIDER_SPECS, ProviderService
 
 router = APIRouter(prefix="/platform", tags=["platform"])
@@ -984,3 +990,103 @@ async def toggle_provider(
         detail="enabled" if enabled else "disabled",
     )
     return _provider_read(connection)
+
+
+# --- price books ------------------------------------------------------
+
+
+def _book_read(book, rules, problems) -> PriceBookRead:  # noqa: ANN001
+    return PriceBookRead(
+        **PriceBookRead.model_validate(book).model_dump(exclude={"rules", "below_cost"}),
+        rules=[PriceRuleRead.model_validate(r) for r in rules],
+        below_cost=[p.billable for p in problems],
+    )
+
+
+async def _book_with_rules(db, book):  # noqa: ANN001
+    rows = await db.execute(
+        select(PriceRule).where(PriceRule.price_book_id == book.id).order_by(PriceRule.billable)
+    )
+    rules = list(rows.scalars())
+    problems = await PricingEngine(db).check_publishable(book)
+    return _book_read(book, rules, problems)
+
+
+@router.get("/price-books", response_model=list[PriceBookRead], summary="All price books")
+async def price_books(db: DbSession, admin: PlatformAdmin) -> list[PriceBookRead]:
+    rows = await db.execute(select(PriceBook).order_by(PriceBook.slug, PriceBook.version.desc()))
+    return [await _book_with_rules(db, book) for book in rows.scalars()]
+
+
+@router.put(
+    "/price-books/{book_id}/rules",
+    response_model=PriceBookRead,
+    summary="Set a rule",
+)
+async def upsert_rule(
+    book_id: uuid.UUID, payload: PriceRuleWrite, db: DbSession, admin: PlatformAdmin
+) -> PriceBookRead:
+    """Edit a rule on a draft book.
+
+    Published books are immutable: changing one would alter what last month's
+    calls cost. Repricing means a new version.
+    """
+    book = await db.get(PriceBook, book_id)
+    if book is None:
+        raise NotFoundError("Price book not found")
+    if book.status == PriceBookStatus.PUBLISHED:
+        raise AppError(
+            "A published price book cannot be edited. Create a new version "
+            "instead, so past charges keep the price they were made under.",
+            code="book_published",
+        )
+
+    found = await db.execute(
+        select(PriceRule).where(
+            PriceRule.price_book_id == book.id,
+            PriceRule.billable == payload.billable,
+            PriceRule.region.is_(None)
+            if payload.region is None
+            else PriceRule.region == payload.region,
+        )
+    )
+    rule = found.scalars().first()
+    fields = payload.model_dump()
+    if rule is None:
+        db.add(PriceRule(price_book_id=book.id, **fields))
+    else:
+        for field, value in fields.items():
+            setattr(rule, field, value)
+    await db.commit()
+
+    await _record(db, admin, "pricing.rule_changed", target=book.slug, detail=payload.billable)
+    return await _book_with_rules(db, book)
+
+
+@router.post(
+    "/price-books/{book_id}/publish",
+    response_model=PriceBookRead,
+    summary="Publish a price book",
+)
+async def publish_book(
+    book_id: uuid.UUID, payload: PublishRequest, db: DbSession, admin: PlatformAdmin
+) -> PriceBookRead:
+    """Refuses a book that sells below its own recorded cost without a reason."""
+    book = await db.get(PriceBook, book_id)
+    if book is None:
+        raise NotFoundError("Price book not found")
+    try:
+        book = await PricingEngine(db).publish(
+            book, actor_id=admin.id, override_reason=payload.override_reason
+        )
+    except BelowCost as exc:
+        raise AppError(str(exc), code="below_cost") from exc
+
+    await _record(
+        db,
+        admin,
+        "pricing.published",
+        target=book.slug,
+        detail=payload.override_reason or "within cost",
+    )
+    return await _book_with_rules(db, book)

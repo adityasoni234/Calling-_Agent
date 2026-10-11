@@ -9,6 +9,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type {
   AdminOrder,
+  PriceBook,
+  PriceRule,
   ProviderConnection,
   ProviderHealth,
   AdminPackage,
@@ -233,5 +235,42 @@ export function useToggleProvider() {
       ),
     onSuccess: () =>
       client.invalidateQueries({ queryKey: ["platform", "providers"] }),
+  });
+}
+
+// --- price books ------------------------------------------------------
+
+export function usePriceBooks() {
+  return useQuery({
+    queryKey: ["platform", "price-books"],
+    queryFn: () => api.get<PriceBook[]>("/platform/price-books"),
+    retry: false,
+  });
+}
+
+export function useSaveRule() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      bookId,
+      rule,
+    }: {
+      bookId: string;
+      rule: Partial<PriceRule>;
+    }) => api.put<PriceBook>(`/platform/price-books/${bookId}/rules`, rule),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["platform", "price-books"] }),
+  });
+}
+
+export function usePublishBook() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookId, reason }: { bookId: string; reason?: string }) =>
+      api.post<PriceBook>(`/platform/price-books/${bookId}/publish`, {
+        override_reason: reason ?? null,
+      }),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["platform", "price-books"] }),
   });
 }

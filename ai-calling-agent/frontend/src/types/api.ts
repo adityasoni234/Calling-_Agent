@@ -1061,6 +1061,8 @@ export interface EmailReadiness {
   ready: boolean;
   blockers: string[];
   provider: string;
+  /** True when sends are recorded rather than delivered. */
+  test_mode: boolean;
   unpriced: boolean;
   suppressed_total: number;
 }

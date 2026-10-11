@@ -488,3 +488,18 @@ async def test_one_tenant_cannot_see_anothers_email(client, auth_headers, db_ses
     )
     theirs = {"Authorization": f"Bearer {rival.json()['tokens']['access_token']}"}
     assert (await client.get("/email/messages", headers=theirs)).json()["total"] == 0
+
+
+async def test_test_mode_is_never_reported_as_ready(client, auth_headers, db_session) -> None:
+    """The mock reports itself configured so the path can run locally.
+
+    Treating that as "ready to send" would show a healthy screen while
+    nothing is delivered, which is the failure this endpoint exists to
+    prevent.
+    """
+    response = await client.get("/email/readiness", headers=auth_headers)
+    body = response.json()
+    assert body["provider"] == "mock"
+    assert body["test_mode"] is True
+    assert body["ready"] is False
+    assert any("nothing is actually delivered" in b for b in body["blockers"])

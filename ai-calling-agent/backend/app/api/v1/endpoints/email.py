@@ -84,6 +84,16 @@ async def readiness(db: DbSession, user: CurrentUser) -> dict:
             "No email provider is configured. Add SMTP credentials or a "
             "Postmark token in provider settings."
         )
+    elif provider.name == "mock":
+        # The mock reports itself configured so the whole path can run in
+        # development. Saying "ready" on the strength of that would show a
+        # healthy screen while nothing is actually delivered -- which is
+        # exactly the failure this endpoint exists to prevent.
+        blockers.append(
+            "Running in test mode: messages are recorded but nothing is "
+            "actually delivered. Set EMAIL_PROVIDER to smtp or postmark and "
+            "add credentials to send for real."
+        )
 
     from decimal import Decimal
 
@@ -106,6 +116,10 @@ async def readiness(db: DbSession, user: CurrentUser) -> dict:
         "ready": not blockers,
         "blockers": blockers,
         "provider": provider.name,
+        #: True when sends are recorded rather than delivered. The UI leads
+        #: with this, because a "sent" badge that delivered nothing is worse
+        #: than an error.
+        "test_mode": provider.name == "mock",
         "unpriced": unpriced,
         "suppressed_total": len(list(suppressed.scalars())),
     }

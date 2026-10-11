@@ -62,7 +62,18 @@ export function EmailPage() {
         description="Addresses are checked before anything is sent, and a bounce blocks that address for good."
       />
 
-      {blockers.length > 0 && (
+      {readiness.data?.test_mode && (
+        <Alert tone="warning">
+          <strong className="font-medium">
+            Test mode — nothing is delivered.
+          </strong>{" "}
+          Messages are recorded and show as sent so you can try the whole flow,
+          but no email actually leaves. Connect a provider in settings to send
+          for real.
+        </Alert>
+      )}
+
+      {blockers.length > 0 && !readiness.data?.test_mode && (
         <Alert tone="warning">
           <strong className="font-medium">Email is not ready to send.</strong>
           <ul className="mt-1.5 space-y-1">
@@ -237,6 +248,7 @@ function Validate() {
 // --- single send ------------------------------------------------------
 
 function SendOne() {
+  const readiness = useEmailReadiness();
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -321,8 +333,11 @@ function SendOne() {
           <dl className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <dt className="text-ink-500">Status</dt>
-              <dd>
+              <dd className="flex items-center gap-2">
                 <Badge value={sent.status} />
+                {readiness.data?.test_mode && sent.status === "sent" && (
+                  <span className="text-2xs text-amber-700">not delivered</span>
+                )}
               </dd>
             </div>
             <div className="flex items-center justify-between">

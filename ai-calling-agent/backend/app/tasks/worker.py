@@ -85,11 +85,72 @@ async def reap_stale_calls(_ctx: dict[str, Any]) -> None:
             await CampaignService(db).reap_stale_calls(organization_id)
 
 
+async def deliver_webhooks(_ctx: dict[str, Any]) -> None:
+    """Flush queued webhook deliveries to subscribed CRMs."""
+    from app.services.integration_service import IntegrationService
+
+    async with SessionLocal() as db:
+        sent = await IntegrationService(db).deliver_pending()
+        if sent:
+            log.info("integration.webhooks_delivered", count=sent)
+
+
+async def learning_tick(_ctx: dict[str, Any]) -> None:
+    """Retire losing phrasings, and draft new ones from calls that went badly.
+
+    Hourly, not per-call: proposals cost an LLM request each, and a bandit that
+    gains an arm every few minutes never accumulates enough trials to judge any
+    of them.
+    """
+    from sqlalchemy import select
+
+    from app.models.agent import Agent
+    from app.services.learning_service import LearningService
+
+    async with SessionLocal() as db:
+        agent_ids = list(
+            (await db.execute(select(Agent.id).where(Agent.is_active.is_(True)))).scalars()
+        )
+
+    for agent_id in agent_ids:
+        async with SessionLocal() as db:
+            agent = await db.get(Agent, agent_id)
+            if agent is None:
+                continue
+            service = LearningService(db)
+            try:
+                retired = await service.retire_losers(agent)
+                proposed = await service.propose(agent)
+                if retired or proposed:
+                    log.info(
+                        "learning.tick",
+                        agent=agent.name,
+                        retired=retired,
+                        proposed=len(proposed),
+                    )
+            except Exception as exc:
+                # One agent's experiment must not stop the others.
+                log.warning("learning.tick_failed", agent=agent.name, error=str(exc))
+
+
+async def expire_reservations(_ctx: dict[str, Any]) -> None:
+    """Return credits held for calls that never reported a terminal state."""
+    from app.services.billing_service import BillingService
+
+    async with SessionLocal() as db:
+        freed = await BillingService(db).expire_stale_reservations()
+        if freed:
+            log.warning("billing.reservations_expired", count=freed)
+
+
 class WorkerSettings:
     functions = [run_post_call, run_ingest, run_campaign_dispatch]
     cron_jobs = [
         cron(tick_campaigns, second={0, 15, 30, 45}, run_at_startup=True),
         cron(reap_stale_calls, minute=set(range(0, 60, 5)), run_at_startup=True),
+        cron(deliver_webhooks, second={5, 20, 35, 50}),
+        cron(learning_tick, minute={17}),
+        cron(expire_reservations, minute=set(range(0, 60, 5))),
     ]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = 20

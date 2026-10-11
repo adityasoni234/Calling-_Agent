@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.errors import AppError, NotFoundError
 from app.core.logging import get_logger
-from app.models.call import Call, CallStatus
+from app.models.call import Call, CallSource, CallStatus
 from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus, CampaignStatus
 from app.models.lead import Lead, LeadStatus
 from app.models.organization import Organization
@@ -226,6 +226,9 @@ class CampaignService:
                 agent_id=campaign.agent_id,
                 lead_id=lead.id,
                 campaign_id=campaign.id,
+                # No initiating user: a dispatcher tick placed this, not a person.
+                source=CallSource.CAMPAIGN,
+                source_detail=f"campaign · {campaign.name}",
             )
             if call.status is CallStatus.FAILED:
                 await self.on_call_finished(call)

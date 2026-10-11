@@ -25,6 +25,7 @@ from app.core.security import (
     hash_refresh_token,
     verify_password,
 )
+from app.models.billing import CreditEntry, CreditEntryKind
 from app.models.organization import Organization
 from app.models.refresh_token import RefreshToken
 from app.models.user import User, UserRole
@@ -50,6 +51,20 @@ class AuthService:
     async def get_user_by_email(self, email: str) -> User | None:
         result = await self.db.execute(select(User).where(User.email == email.lower()))
         return result.unique().scalar_one_or_none()
+
+    async def organization_owner(self, organization_id: uuid.UUID) -> User | None:
+        """The account an API key acts as. Oldest owner, so it is stable."""
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.organization_id == organization_id,
+                User.role == UserRole.OWNER,
+                User.is_active.is_(True),
+            )
+            .order_by(User.created_at)
+            .limit(1)
+        )
+        return result.scalars().first()
 
     async def get_user(self, user_id: uuid.UUID) -> User | None:
         result = await self.db.execute(select(User).where(User.id == user_id))
@@ -85,9 +100,23 @@ class AuthService:
         organization = Organization(
             name=organization_name.strip(),
             slug=await self._unique_slug(organization_name),
+            # Enough to place a few real calls. An account that cannot try the
+            # product before paying will not convert.
+            credit_balance=settings.trial_credits,
         )
         self.db.add(organization)
         await self.db.flush()
+
+        # The opening ledger entry, so the balance has a provenance from row one.
+        self.db.add(
+            CreditEntry(
+                organization_id=organization.id,
+                kind=CreditEntryKind.GRANT,
+                amount=settings.trial_credits,
+                balance_after=settings.trial_credits,
+                note="Trial credits on sign-up",
+            )
+        )
 
         user = User(
             organization_id=organization.id,

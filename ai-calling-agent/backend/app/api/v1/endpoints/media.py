@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.agents.conversation import ConversationManager, ConversationResult
+from app.agents.variants import apply_variants
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.session import SessionLocal
@@ -26,6 +27,7 @@ from app.services.call_service import CallService
 from app.services.campaign_service import CampaignService
 from app.services.cost_service import CostService
 from app.services.knowledge.retriever import Retriever
+from app.services.learning_service import LearningService
 from app.services.registry import get_llm, get_stt, get_telephony, get_tts
 from app.services.telephony.region import region_of
 from app.tasks.queue import enqueue_post_call
@@ -88,6 +90,18 @@ async def media_stream(websocket: WebSocket, call_id: uuid.UUID) -> None:
             return [], []
         async with SessionLocal() as session:
             return await Retriever(session).search(knowledge_base_id, query)
+
+    # Let the bandit pick this call's phrasings before the agent speaks. A
+    # failure here must never stop a call -- the agent falls back to its own
+    # configured wording, which is also the control arm.
+    try:
+        async with SessionLocal() as session:
+            service = LearningService(session)
+            await service.ensure_baselines(agent)
+            chosen = await service.choose(agent, call_id)
+        agent = apply_variants(agent, chosen)
+    except Exception as exc:  # the call matters more than the experiment
+        log.warning("learning.selection_failed", call_id=str(call_id), error=str(exc))
 
     manager = ConversationManager(
         agent=agent,
@@ -180,6 +194,10 @@ async def _persist(call_id: uuid.UUID, result: ConversationResult) -> None:
             call.duration_seconds = max(0, int((call.ended_at - call.answered_at).total_seconds()))
         call.status = CallStatus.COMPLETED
         call.end_reason = result.end_reason
+        # Surface a dead vendor on the call itself, so the UI says why the
+        # agent was silent instead of showing a clean "completed".
+        if result.provider_error and not call.error:
+            call.error = result.provider_error
 
         records = list(result.usage.records)
         if call.duration_seconds > 0:

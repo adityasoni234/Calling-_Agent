@@ -74,6 +74,10 @@ class ConversationResult:
     state: ConversationState = ConversationState.GREETING
     end_reason: str = "completed"
     transfer_requested: bool = False
+    #: First provider failure of the call, verbatim. A call where the agent
+    #: could not speak used to finish as "completed" with nothing recorded,
+    #: which made a dead vendor account look like a working call.
+    provider_error: str | None = None
 
 
 RetrieveFn = Callable[[str], Awaitable[tuple[list[str], list[UsageRecord]]]]
@@ -122,6 +126,8 @@ class ConversationManager:
         self._speaking_since = 0.0
         self._loud_since = 0.0
         self._interrupted_text = ""
+        self._tts_failures = 0
+        self._llm_failures = 0
         self._recover_task: asyncio.Task[None] | None = None
         self._current_utterance = ""
         self._wrapping_up = False
@@ -449,6 +455,12 @@ class ConversationManager:
             raise
         except Exception as exc:
             log.error("conversation.llm_failed", error=str(exc))
+            self._record_provider_error("llm", exc)
+            self._llm_failures += 1
+            if self._llm_failures >= 2 and not self._finished.is_set():
+                log.error("conversation.llm_unavailable", failures=self._llm_failures)
+                await self._finish("llm_unavailable")
+                return
             buffer = buffer or "Sorry, I did not catch that. Could you repeat?"
 
         if buffer.strip() and not self._pending_barge_in:
@@ -481,6 +493,11 @@ class ConversationManager:
 
     #: Longest we will hold a call open waiting for queued audio to finish.
     _DRAIN_TIMEOUT = 20.0
+
+    def _record_provider_error(self, component: str, exc: Exception) -> None:
+        """Keep the first failure only -- the later ones are the same cause."""
+        if self.result.provider_error is None:
+            self.result.provider_error = f"{component}: {exc}"[:500]
 
     async def _drain_speech(self) -> None:
         """Wait for queued audio to finish playing, but never hang on it."""
@@ -517,6 +534,15 @@ class ConversationManager:
             raise
         except Exception as exc:
             log.error("conversation.tts_failed", error=str(exc))
+            self._record_provider_error("tts", exc)
+            self._tts_failures += 1
+            # Nothing the caller can hear is coming. Sitting on an open line
+            # in silence is worse than hanging up, and it bills by the minute.
+            if self._tts_failures >= 2 and not self._finished.is_set():
+                log.error("conversation.tts_unavailable", failures=self._tts_failures)
+                await self._finish("tts_unavailable")
+        else:
+            self._tts_failures = 0
         finally:
             self._speaking = False
 

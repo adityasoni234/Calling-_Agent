@@ -48,6 +48,10 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=UserRole.OWNER,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: Platform staff, not a customer. Can see and administer every organization,
+    #: which is why it is a separate flag rather than another UserRole value --
+    #: no customer self-service path can ever set it.
+    is_platform_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     organization: Mapped[Organization] = relationship(back_populates="users", lazy="joined")

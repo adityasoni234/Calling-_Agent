@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -15,9 +15,15 @@
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
-  /* Headings read better slightly tightened; body text does not. */
-  h1, h2, h3 {
-    @apply tracking-[-0.015em];
+  /* Headings are set in the serif, at optical sizes meant for display. A serif
+     at small sizes on screen turns to mush, so only h1 and h2 take it. */
+  h1, h2 {
+    @apply font-display font-normal tracking-[-0.01em];
+    font-optical-sizing: auto;
+  }
+
+  h3, h4 {
+    @apply tracking-[-0.005em];
   }
 
   :focus-visible {
@@ -52,5 +58,22 @@
   .skeleton::after {
     @apply absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-white/70 to-transparent;
     content: '';
+  }
+}
+
+@layer components {
+  /* A hairline rule, used instead of boxing every section. */
+  .rule {
+    @apply border-t border-ink-200/70;
+  }
+
+  /* Figures are the point of a dashboard: set them larger, in the serif, and
+     let the label sit quietly beneath. */
+  .figure {
+    @apply font-display text-[2rem] font-normal leading-none tabular-nums text-ink-900;
+  }
+
+  .figure-label {
+    @apply mt-2 text-2xs font-medium uppercase tracking-[0.1em] text-ink-400;
   }
 }

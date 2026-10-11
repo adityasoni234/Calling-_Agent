@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Alert } from '@/components/ui/Alert'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { EmptyState, Pager, Table } from '@/components/ui/Table'
 import { RecordingPlayer } from '@/components/RecordingPlayer'
@@ -25,12 +26,10 @@ export function CallsPage() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-xl font-semibold text-ink-900">Calls</h1>
-        <p className="mt-1 text-sm text-ink-500">
-          Every call, its transcript, and what it cost.
-        </p>
-      </header>
+      <PageHeader
+        title="Call History"
+        description="Every call with its transcript, recording, outcome and cost."
+      />
 
       <Card>
         <div className="mb-4">
@@ -57,7 +56,29 @@ export function CallsPage() {
             hint={
               status
                 ? 'Clear the filter to see everything.'
-                : 'Call a single lead from the Leads page to try it, or start a campaign to dial a whole list.'
+                : 'Call a single lead yourself to try it, or start a campaign to dial a whole list.'
+            }
+            action={
+              status ? (
+                <Button variant="secondary" onClick={() => setStatus('')}>
+                  Clear filter
+                </Button>
+              ) : (
+                <>
+                  <Link
+                    to="/manual"
+                    className="rounded-xl bg-brand-sheen px-2.5 py-1.5 text-xs font-medium text-white shadow-glow transition-all hover:brightness-110"
+                  >
+                    Call someone now
+                  </Link>
+                  <Link
+                    to="/campaigns"
+                    className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-medium text-ink-700 shadow-card ring-1 ring-inset ring-ink-200 transition-colors hover:bg-ink-50"
+                  >
+                    Start a campaign
+                  </Link>
+                </>
+              )
             }
           />
         ) : (

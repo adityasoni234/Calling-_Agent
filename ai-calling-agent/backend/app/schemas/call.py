@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.call import CallDirection, CallStatus, UsageComponent
+from app.models.call import CallDirection, CallMode, CallSource, CallStatus, UsageComponent
 
 
 class CallCreate(BaseModel):
@@ -16,15 +16,35 @@ class CallCreate(BaseModel):
     from_number: str | None = Field(default=None, max_length=32)
 
 
+class BridgeCallRequest(BaseModel):
+    """Ring me, then connect me to this person."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The phone the operator will answer on.
+    operator_number: str = Field(min_length=6, max_length=32)
+    lead_id: uuid.UUID | None = None
+    to_number: str | None = Field(default=None, max_length=32)
+    record: bool = True
+
+
 class CallRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     organization_id: uuid.UUID
-    agent_id: uuid.UUID
+    agent_id: uuid.UUID | None
     lead_id: uuid.UUID | None
     campaign_id: uuid.UUID | None
     direction: CallDirection
+    mode: CallMode
+    operator_number: str | None
+    #: Who started it, and how. Null initiator means a campaign tick or an
+    #: inbound route placed the call, not a person.
+    initiated_by_user_id: uuid.UUID | None
+    source: CallSource
+    source_detail: str | None
+    agent_version: int | None
     provider: str
     provider_call_id: str | None
     from_number: str

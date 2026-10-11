@@ -3,14 +3,17 @@ from __future__ import annotations
 import asyncio
 import uuid
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, requires
 from app.core.config import settings
 from app.core.errors import NotFoundError, ValidationFailedError
+from app.core.permissions import Capability
 from app.models.knowledge import Document, DocumentChunk, DocumentStatus, KnowledgeBase
+from app.models.user import User
 from app.schemas.common import MessageResponse
 from app.schemas.knowledge import (
     DocumentRead,
@@ -184,7 +187,9 @@ async def add_faq(
     "/documents/{document_id}", response_model=MessageResponse, summary="Delete a document"
 )
 async def delete_document(
-    document_id: uuid.UUID, db: DbSession, user: CurrentUser
+    document_id: uuid.UUID,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_KNOWLEDGE))],
 ) -> MessageResponse:
     document = await db.get(Document, document_id)
     if document is None or document.organization_id != user.organization_id:

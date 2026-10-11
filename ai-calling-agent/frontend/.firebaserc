@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "stockvala-agent"
+  },
+  "targets": {
+    "stockvala-agent": {
+      "hosting": {
+        "app": [
+          "stockvala-agent"
+        ],
+        "admin": [
+          "stockvala-admin"
+        ]
+      }
+    }
   }
 }

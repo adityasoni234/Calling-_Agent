@@ -78,6 +78,17 @@ class TelephonyProvider(ABC):
     def answer_document(self, *, websocket_url: str) -> tuple[str, str]:
         """Return `(body, content_type)` telling the provider to open the media stream."""
 
+    def bridge_document(
+        self, *, to_number: str, caller_id: str, record: bool = False
+    ) -> tuple[str, str]:
+        """Document that connects the answered leg to `to_number`.
+
+        Used for human-operated calls: we ring the operator first, and when they
+        pick up the carrier fetches this and dials the lead. Ringing the operator
+        first means the lead's phone only rings once someone is actually there.
+        """
+        raise NotImplementedError(f"{self.name} cannot bridge two legs")
+
     @abstractmethod
     def parse_webhook(self, payload: dict[str, Any]) -> TelephonyEvent: ...
 

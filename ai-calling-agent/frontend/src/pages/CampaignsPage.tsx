@@ -5,6 +5,7 @@ import { Alert } from '@/components/ui/Alert'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Field } from '@/components/ui/Field'
 import { Select } from '@/components/ui/Inputs'
 import { Modal } from '@/components/ui/Modal'
@@ -15,8 +16,10 @@ import {
   useAgents,
   useCampaign,
   useCampaignControl,
+  useAddSheetToCampaign,
   useCampaignLeads,
   useImportCampaignLeads,
+  useLeadLists,
   useCampaigns,
   useCreateCampaign,
   useLead,
@@ -33,15 +36,11 @@ export function CampaignsPage() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-ink-900">Campaigns</h1>
-          <p className="mt-1 text-sm text-ink-500">
-            Batch outbound calling, with a hard cap on how many run at once.
-          </p>
-        </div>
-        <Button onClick={() => setCreating(true)}>New campaign</Button>
-      </header>
+      <PageHeader
+        title="Campaigns"
+        description="Dial a whole list automatically, at a pace and budget you control."
+        actions={<Button onClick={() => setCreating(true)}>New campaign</Button>}
+      />
 
       <Card>
         {isLoading ? (
@@ -50,6 +49,23 @@ export function CampaignsPage() {
           <EmptyState
             title="No campaigns yet"
             hint="A campaign dials a list of leads with an agent, inside calling hours you set, a few at a time. You need at least one agent and some leads first."
+            action={
+              <>
+                <Button onClick={() => setCreating(true)}>New campaign</Button>
+                <Link
+                  to="/agents"
+                  className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-medium text-ink-700 shadow-card ring-1 ring-inset ring-ink-200 transition-colors hover:bg-ink-50"
+                >
+                  Create an agent
+                </Link>
+                <Link
+                  to="/leads"
+                  className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-medium text-ink-700 shadow-card ring-1 ring-inset ring-ink-200 transition-colors hover:bg-ink-50"
+                >
+                  Import leads
+                </Link>
+              </>
+            }
           />
         ) : (
           <Table headers={['Name', 'Status', 'Calling hours', 'Concurrency', 'Retries', '']}>
@@ -156,7 +172,26 @@ export function CampaignDetailPage() {
             </>
           )}
           {campaign.status !== 'stopped' && campaign.status !== 'completed' && (
-            <Button variant="danger" onClick={() => act('stop')}>Stop</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                // A stopped campaign cannot be restarted, and it is one click
+                // away from Pause. Say which is which before it happens.
+                const live = stats.active_calls
+                if (
+                  confirm(
+                    `Stop "${campaign.name}" for good?\n\n` +
+                      (live > 0 ? `${live} call(s) are live right now.\n` : '') +
+                      `${stats.pending} lead(s) will never be called.\n\n` +
+                      'A stopped campaign cannot be restarted — use Pause if you only want a break.',
+                  )
+                ) {
+                  act('stop')
+                }
+              }}
+            >
+              Stop
+            </Button>
           )}
         </div>
       </header>
@@ -299,10 +334,11 @@ function CampaignEditor({ onClose }: { onClose: () => void }) {
           />
         </div>
 
-        <div>
+        <div className="space-y-2">
           <LeadPicker selected={selected} onChange={setSelected} />
-          <p className="mt-2 text-xs text-ink-400">
-            Have a list instead? Create the campaign, then upload a CSV to it directly.
+          <p className="text-xs text-ink-400">
+            Filter to a sheet, then use “Select all” to take the whole list. You can also
+            upload a CSV to the campaign after creating it.
           </p>
         </div>
       </div>
@@ -339,6 +375,10 @@ function CampaignLeadList({ campaignId, callsMade }: { campaignId: string; calls
   const fileInput = useRef<HTMLInputElement>(null)
   const token = useAuthStore((state) => state.tokens?.access_token ?? null)
   const importLeads = useImportCampaignLeads(campaignId, token)
+  const { data: sheetData } = useLeadLists()
+  const sheets = sheetData ?? []
+  const addSheet = useAddSheetToCampaign(campaignId)
+  const [note, setNote] = useState<string | null>(null)
 
   const pickFile = () => fileInput.current?.click()
 
@@ -372,6 +412,26 @@ function CampaignLeadList({ campaignId, callsMade }: { campaignId: string; calls
               }
             }}
           />
+          {sheets.length > 0 && (
+            <select
+              value=""
+              disabled={addSheet.isPending}
+              onChange={(event) => {
+                const id = event.target.value
+                if (!id) return
+                event.target.value = ''
+                addSheet.mutate(id, { onSuccess: (result) => setNote(result.message) })
+              }}
+              className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-medium text-ink-700 shadow-card ring-1 ring-inset ring-ink-200 transition-colors hover:bg-ink-50"
+            >
+              <option value="">Add a sheet…</option>
+              {sheets.map((sheet) => (
+                <option key={sheet.id} value={sheet.id}>
+                  {sheet.name} ({sheet.lead_count})
+                </option>
+              ))}
+            </select>
+          )}
           <Button size="sm" variant="secondary" onClick={pickFile} loading={importLeads.isPending}>
             Upload CSV
           </Button>
@@ -385,6 +445,11 @@ function CampaignLeadList({ campaignId, callsMade }: { campaignId: string; calls
       }
       flush
     >
+      {note && (
+        <div className="px-5 pt-4">
+          <Alert tone="success">{note}</Alert>
+        </div>
+      )}
       {imported && (
         <div className="px-5 pt-4">
           <Alert tone={imported.errors.length ? 'warning' : 'success'}>

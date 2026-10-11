@@ -15,8 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.models.call import Call, CallTurn
+from app.models.integration import WebhookEvent
 from app.models.lead import InterestLevel, Lead, LeadStatus
+from app.services.billing_service import BillingService
 from app.services.cost_service import CostService
+from app.services.integration_service import IntegrationService
+from app.services.learning_service import LearningService
 from app.services.registry import get_llm
 
 log = get_logger(__name__)
@@ -100,7 +104,62 @@ class PostCallService:
             await self._apply_to_lead(call.lead_id, extraction)
 
         log.info("postcall.done", call_id=str(call_id), score=extraction.lead_score)
+        await self._notify_integrations(call, extraction)
+
+        # Bill the customer now that the real cost is known. A billing failure
+        # must never lose the call record -- we can re-charge, we cannot
+        # reconstruct a transcript.
+        try:
+            await BillingService(self.db).charge_for_call(call)
+        except Exception as exc:
+            log.error("postcall.billing_failed", call_id=str(call.id), error=str(exc))
+
+        # Credit whichever phrasings this call used. A broken experiment must
+        # never cost us the call record, which is the actual product.
+        try:
+            lead = await self.db.get(Lead, call.lead_id) if call.lead_id else None
+            await LearningService(self.db).record_outcome(call, lead)
+        except Exception as exc:
+            log.warning("learning.reward_failed", call_id=str(call.id), error=str(exc))
         return extraction
+
+    async def _notify_integrations(self, call: Call, extraction: CallExtraction) -> None:
+        """Tell any subscribed CRM what happened, without blocking the call.
+
+        A broken integration must never fail post-call processing -- the call
+        data is ours and has to be saved whether or not someone else wants it.
+        """
+        try:
+            service = IntegrationService(self.db)
+            lead = await self.db.get(Lead, call.lead_id) if call.lead_id else None
+            payload = {
+                "call_id": str(call.id),
+                "status": str(call.status),
+                "duration_seconds": call.duration_seconds,
+                "cost_usd": call.cost_usd,
+                "recording_url": call.recording_url,
+                "summary": extraction.summary,
+                "outcome": extraction.outcome,
+                "interest_level": str(extraction.interest_level),
+                "lead_score": extraction.lead_score,
+                "followup_opt_in": extraction.followup_opt_in,
+                "lead": (
+                    {
+                        "id": str(lead.id),
+                        "name": lead.name,
+                        "phone_number": lead.phone_number,
+                        "email": lead.email,
+                        "status": str(lead.status),
+                    }
+                    if lead
+                    else None
+                ),
+            }
+            await service.queue(call.organization_id, WebhookEvent.CALL_COMPLETED, payload)
+            if lead is not None and lead.status in {LeadStatus.QUALIFIED, LeadStatus.CONVERTED}:
+                await service.queue(call.organization_id, WebhookEvent.LEAD_QUALIFIED, payload)
+        except Exception as exc:
+            log.warning("postcall.webhook_queue_failed", call_id=str(call.id), error=str(exc))
 
     async def _transcript(self, call_id: uuid.UUID) -> str:
         result = await self.db.execute(

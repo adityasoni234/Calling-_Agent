@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Inputs";
 import { StatCard } from "@/components/ui/StatCard";
 import { EmptyState, Pager, Table } from "@/components/ui/Table";
@@ -134,23 +135,19 @@ export function QualifiedPage() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-ink-900">
-            Qualified leads
-          </h1>
-          <p className="mt-1 text-sm text-ink-500">
-            Everyone your agents judged worth following up, best first.
-          </p>
-        </div>
-        <Button
-          variant="secondary"
-          onClick={exportCsv}
-          disabled={rows.length === 0}
-        >
-          Export this view
-        </Button>
-      </header>
+      <PageHeader
+        title="Qualified Leads"
+        description="Everyone your agents judged worth following up, best first."
+        actions={
+          <Button
+            variant="secondary"
+            onClick={exportCsv}
+            disabled={rows.length === 0}
+          >
+            Export this view
+          </Button>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard

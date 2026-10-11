@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Field } from '@/components/ui/Field'
@@ -61,15 +62,11 @@ export function AgentsPage() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-ink-900">AI Agents</h1>
-          <p className="mt-1 text-sm text-ink-500">
-            The persona, objectives, and rules each agent follows on a call.
-          </p>
-        </div>
-        <Button onClick={() => setEditing({ ...BLANK })}>New agent</Button>
-      </header>
+      <PageHeader
+        title="AI Agents"
+        description="Who calls your leads, what they ask, and what they must never claim."
+        actions={<Button onClick={() => setEditing({ ...BLANK })}>New agent</Button>}
+      />
 
       <Card>
         {isLoading ? (
@@ -78,6 +75,7 @@ export function AgentsPage() {
           <EmptyState
             title="No agents yet"
             hint="An agent is the script and personality for a call. Describe your business in a few lines and it writes the whole thing for you."
+            action={<Button onClick={() => setEditing({ ...BLANK })}>Create your first agent</Button>}
           />
         ) : (
           <Table headers={['Name', 'Role', 'Language', 'Voice', 'Status', '']}>
@@ -138,6 +136,58 @@ export function AgentsPage() {
   )
 }
 
+/**
+ * What the agent will actually do, in sentences.
+ *
+ * A new user cannot check twenty-seven form fields, but they can read four
+ * paragraphs and say "that's wrong, she shouldn't ask that". This is the
+ * review step; the form underneath is for people who want it.
+ */
+function PlainReview({ form }: { form: Partial<Agent> }) {
+  const lines: { heading: string; body: string[] }[] = [
+    {
+      heading: 'She opens with',
+      body: [form.greeting ? `"${form.greeting}"` : 'Nothing set yet.'],
+    },
+    {
+      heading: 'She is trying to',
+      body: [form.primary_objective || 'Nothing set yet.'],
+    },
+    {
+      heading: 'She will ask',
+      body: (form.qualification_questions ?? []).length
+        ? (form.qualification_questions as string[])
+        : ['No questions yet.'],
+    },
+    {
+      heading: 'She will never',
+      body: (form.forbidden_rules ?? []).length
+        ? (form.forbidden_rules as string[])
+        : ['No limits set — worth adding some.'],
+    },
+  ]
+
+  return (
+    <div className="space-y-4 rounded-xl bg-ink-50 p-5 ring-1 ring-ink-200/70">
+      {lines.map((section) => (
+        <div key={section.heading}>
+          <p className="text-2xs font-medium uppercase tracking-[0.1em] text-ink-400">
+            {section.heading}
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            {section.body.map((item, index) => (
+              <li key={index} className="text-sm leading-relaxed text-ink-800">
+                {section.body.length > 1 && <span className="mr-1.5 text-ink-400">·</span>}
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function AgentEditor({
   agent,
   knowledgeBases,
@@ -151,6 +201,10 @@ function AgentEditor({
   const [error, setError] = useState<string | null>(null)
   const [brief, setBrief] = useState('')
   const [generated, setGenerated] = useState<string | null>(null)
+  // A new agent starts in plain-language mode: describe it, read it back,
+  // save. The full form is opt-in, not the default.
+  const [drafted, setDrafted] = useState(false)
+  const [showForm, setShowForm] = useState(Boolean(agent.id))
   const save = useSaveAgent(agent.id)
   const generate = useGenerateAgent()
 
@@ -162,6 +216,7 @@ function AgentEditor({
       // Merge over the current form so voice, timers and knowledge base survive.
       setForm((current) => ({ ...current, ...result.draft }))
       setGenerated(result.notes)
+      setDrafted(true)
     } catch (err) {
       setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Could not draft the agent')
     }
@@ -194,12 +249,13 @@ function AgentEditor({
           <div className="rounded-xl bg-brand-50 p-4 ring-1 ring-brand-200">
             <p className="text-sm font-semibold text-ink-900">Start by describing it</p>
             <p className="mt-1 text-xs leading-relaxed text-ink-600">
-              Who you are, who you're calling, and what a good call achieves. Everything
-              below gets written for you — then you check it.
+              Who you are, who you're calling, and what a good call achieves. A sentence or
+              two is enough — but if you already have a full brief or prompt written, paste
+              the whole thing. The detail gets used, not summarised away.
             </p>
             <TextArea
               label=""
-              rows={3}
+              rows={6}
               className="mt-3"
               value={brief}
               placeholder="We're a stock advisory. Call people who filled our website form, find out what they invest in today, and book a fifteen minute demo. Be respectful, never push."
@@ -217,7 +273,9 @@ function AgentEditor({
               <span className="text-2xs text-ink-500">
                 {brief.trim().length < 20
                   ? 'A sentence or two is enough'
-                  : 'Takes about ten seconds'}
+                  : brief.length > 1200
+                    ? 'Detailed brief — this will take a few seconds longer'
+                    : 'Takes about ten seconds'}
               </span>
             </div>
           </div>
@@ -225,7 +283,33 @@ function AgentEditor({
 
         {generated && <Alert tone="warning">{generated}</Alert>}
 
-        {/* The essentials, always visible. */}
+        {!agent.id && drafted && (
+          <div className="space-y-3">
+            <div>
+              <p className="font-display text-base text-ink-900">
+                Here is what {form.name || 'your agent'} will do
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                Read it through. If something is wrong, open the details below and change it —
+                or describe it differently and write it again.
+              </p>
+            </div>
+            <PlainReview form={form} />
+            {!showForm && (
+              <button
+                type="button"
+                onClick={() => setShowForm(true)}
+                className="text-xs font-medium text-brand-700 underline underline-offset-2 hover:text-brand-800"
+              >
+                Let me change the details myself
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* The form. Hidden on a new agent until someone asks for it: a
+            twenty-seven field wall is where a non-technical user gives up. */}
+        <div className={showForm ? 'contents' : 'hidden'}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
             label="Agent name"
@@ -317,8 +401,8 @@ function AgentEditor({
         </Disclosure>
 
         <Disclosure
-          title="Voice and behaviour"
-          description="How it sounds, and when it gives up"
+          title="Voice, timing and limits"
+          description="Most people never need to change these"
           summary={`${form.voice_config?.voice_id || 'no voice set'} · ${form.max_call_seconds ?? 420}s max`}
         >
           <div className="grid gap-4 sm:grid-cols-2">
@@ -326,10 +410,10 @@ function AgentEditor({
               label="Voice ID"
               value={form.voice_config?.voice_id ?? ''}
               onChange={(e) => set('voice_config', { ...form.voice_config, voice_id: e.target.value })}
-              hint="From your text-to-speech provider."
+              hint="Leave blank to use the default voice. Your provider gives you this if you want a specific one."
             />
             <Select
-              label="Knowledge base"
+              label="Facts she can quote"
               value={form.knowledge_base_id ?? ''}
               onChange={(e) => set('knowledge_base_id', e.target.value || null)}
               hint="Facts to quote instead of guessing."
@@ -342,14 +426,14 @@ function AgentEditor({
               ))}
             </Select>
             <Field
-              label="Hang up after (seconds)"
+              label="End the call after (seconds)"
               type="number"
               value={form.max_call_seconds ?? 420}
               onChange={(e) => set('max_call_seconds', Number(e.target.value))}
               hint="A hard cap, so a stuck call cannot run up cost."
             />
             <Field
-              label="Creativity"
+              label="How much she improvises"
               type="number"
               step="0.1"
               min="0"
@@ -359,13 +443,13 @@ function AgentEditor({
               hint="Lower sticks to the script. 0.6 is a good default."
             />
             <Field
-              label="Check in after silence (ms)"
+              label="If they go quiet, check in after (seconds)"
               type="number"
               value={form.silence_prompt_ms ?? 6000}
               onChange={(e) => set('silence_prompt_ms', Number(e.target.value))}
             />
             <Field
-              label="Give up after silence (ms)"
+              label="If still no answer, hang up after (seconds)"
               type="number"
               value={form.silence_hangup_ms ?? 12000}
               onChange={(e) => set('silence_hangup_ms', Number(e.target.value))}
@@ -410,7 +494,7 @@ function AgentEditor({
           </label>
           {form.transfer_rules?.enabled && (
             <Field
-              label="Transfer to this number"
+              label="Pass the call to this number when asked"
               value={form.transfer_rules?.phone_number ?? ''}
               onChange={(e) =>
                 set('transfer_rules', { ...form.transfer_rules, phone_number: e.target.value })
@@ -418,14 +502,20 @@ function AgentEditor({
             />
           )}
         </Disclosure>
+        </div>
       </div>
 
-      <footer className="mt-4 flex justify-end gap-2 border-t border-ink-100 pt-4">
+      <footer className="mt-4 flex items-center justify-end gap-2 border-t border-ink-200/70 pt-4">
+        {!agent.id && !drafted && (
+          <p className="mr-auto text-xs text-ink-500">
+            Describe your business above — everything else is written for you.
+          </p>
+        )}
         <Button variant="secondary" onClick={onClose}>
           Cancel
         </Button>
-        <Button onClick={submit} loading={save.isPending}>
-          Save agent
+        <Button onClick={submit} loading={save.isPending} disabled={!agent.id && !drafted}>
+          {agent.id ? 'Save changes' : 'Save agent'}
         </Button>
       </footer>
     </Modal>
@@ -435,7 +525,7 @@ function AgentEditor({
 function PromptViewer({ agentId, onClose }: { agentId: string; onClose: () => void }) {
   const { data, isLoading } = useAgentPrompt(agentId)
   return (
-    <Modal open title="Prompt sent to the model" onClose={onClose} wide>
+    <Modal open title="The exact instructions she receives" onClose={onClose} wide>
       {isLoading || !data ? (
         <p className="py-6 text-center text-sm text-ink-500">Building…</p>
       ) : (

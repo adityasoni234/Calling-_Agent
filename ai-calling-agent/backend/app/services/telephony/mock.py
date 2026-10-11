@@ -43,6 +43,14 @@ class MockTelephonyProvider(TelephonyProvider):
     def answer_document(self, *, websocket_url: str) -> tuple[str, str]:
         return (f'{{"stream": "{websocket_url}"}}', "application/json")
 
+    def bridge_document(
+        self, *, to_number: str, caller_id: str, record: bool = False
+    ) -> tuple[str, str]:
+        return (
+            f'<Response><Dial callerId="{caller_id}">{to_number}</Dial></Response>',
+            "application/xml",
+        )
+
     def parse_webhook(self, payload: dict[str, Any]) -> TelephonyEvent:
         status_map = {
             "ringing": (TelephonyEventType.RINGING, CallStatus.RINGING),

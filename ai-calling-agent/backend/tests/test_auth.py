@@ -178,3 +178,29 @@ async def test_seed_script_applies_the_same_password_policy_as_the_api() -> None
     assert await seed("someone@example.com", "12345678", "Weak", "Weak Co") == 2
     assert await seed("someone@example.com", "short1!", "Short", "Short Co") == 2
     assert await seed("someone@example.com", "correct-horse-9", "Fine", "Fine Co") == 0
+
+
+async def test_the_platform_flag_reaches_the_client(client: AsyncClient, db_session) -> None:
+    """The admin UI gates on this; omitting it hid the panel from its own admin."""
+    from sqlalchemy import select
+
+    from app.models.user import User
+    from tests.conftest import REGISTRATION
+
+    registered = await client.post(
+        "/auth/register",
+        json={**REGISTRATION, "email": "flag@example.com", "organization_name": "Flag Co"},
+    )
+    headers = {"Authorization": f"Bearer {registered.json()['tokens']['access_token']}"}
+
+    # A customer is not platform staff.
+    assert registered.json()["user"]["is_platform_admin"] is False
+    assert (await client.get("/auth/me", headers=headers)).json()["is_platform_admin"] is False
+
+    user = (
+        await db_session.execute(select(User).where(User.email == "flag@example.com"))
+    ).scalar_one()
+    user.is_platform_admin = True
+    await db_session.commit()
+
+    assert (await client.get("/auth/me", headers=headers)).json()["is_platform_admin"] is True

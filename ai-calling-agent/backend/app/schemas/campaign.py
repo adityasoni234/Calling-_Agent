@@ -90,6 +90,12 @@ class AddLeadsRequest(BaseModel):
     lead_ids: list[uuid.UUID] = Field(min_length=1, max_length=10000)
 
 
+class AddSheetRequest(BaseModel):
+    """Put everyone on an uploaded sheet onto this campaign."""
+
+    lead_list_id: uuid.UUID
+
+
 class DispatchResult(BaseModel):
     started: int
     reason: str

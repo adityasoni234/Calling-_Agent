@@ -386,3 +386,149 @@ def test_carrier_urls_carry_the_shared_secret(monkeypatch) -> None:
 
     monkeypatch.setattr(settings, "telephony_webhook_secret", "")
     assert "secret=" not in urls.status_url("twilio", call_id)
+
+
+async def test_a_human_can_call_a_lead_through_the_platform(client, auth_headers, lead) -> None:
+    """The operator's phone rings first, then the carrier bridges to the lead."""
+    response = await client.post(
+        "/calls/bridge",
+        json={"operator_number": "+919812345678", "lead_id": lead["id"]},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["mode"] == "human"
+    assert body["agent_id"] is None, "a human call has no AI agent behind it"
+    assert body["operator_number"] == "+919812345678"
+    assert body["to_number"] == lead["phone_number"]
+
+
+async def test_a_human_call_answers_with_a_bridge_not_a_media_stream(
+    client, auth_headers, lead
+) -> None:
+    """Serving the streaming document here would connect the operator to an AI."""
+    created = await client.post(
+        "/calls/bridge",
+        json={"operator_number": "+919812345678", "lead_id": lead["id"]},
+        headers=auth_headers,
+    )
+    answer = await client.post(f"/webhooks/telephony/mock/answer/{created.json()['id']}", json={})
+    assert answer.status_code == 200
+    assert "<Dial" in answer.text
+    assert lead["phone_number"] in answer.text
+    assert "Stream" not in answer.text
+
+
+async def test_an_agent_call_still_answers_with_the_media_stream(
+    client, auth_headers, agent, lead
+) -> None:
+    """The bridge must not have changed what an AI call answers with."""
+    created = await client.post(
+        "/calls",
+        json={"agent_id": agent["id"], "lead_id": lead["id"]},
+        headers=auth_headers,
+    )
+    answer = await client.post(f"/webhooks/telephony/mock/answer/{created.json()['id']}", json={})
+    assert "Stream" in answer.text or "stream" in answer.text.lower()
+
+
+async def test_a_human_call_refuses_a_do_not_call_lead(client, auth_headers, lead) -> None:
+    await client.patch(f"/leads/{lead['id']}", json={"status": "do_not_call"}, headers=auth_headers)
+    response = await client.post(
+        "/calls/bridge",
+        json={"operator_number": "+919812345678", "lead_id": lead["id"]},
+        headers=auth_headers,
+    )
+    assert response.status_code == 409
+
+
+async def test_a_human_call_needs_a_number_to_ring(client, auth_headers, lead) -> None:
+    response = await client.post(
+        "/calls/bridge", json={"lead_id": lead["id"]}, headers=auth_headers
+    )
+    assert response.status_code == 422
+
+
+async def test_calls_can_be_filtered_to_human_or_agent(client, auth_headers, agent, lead) -> None:
+    """The manual-calling page needs its own calls, not everyone's."""
+    await client.post(
+        "/calls", json={"agent_id": agent["id"], "lead_id": lead["id"]}, headers=auth_headers
+    )
+    await client.post(
+        "/calls/bridge",
+        json={"operator_number": "+919812345678", "lead_id": lead["id"]},
+        headers=auth_headers,
+    )
+
+    human = await client.get("/calls?mode=human", headers=auth_headers)
+    assert human.json()["total"] == 1
+    assert human.json()["items"][0]["mode"] == "human"
+
+    agent_calls = await client.get("/calls?mode=agent", headers=auth_headers)
+    assert agent_calls.json()["total"] == 1
+    assert agent_calls.json()["items"][0]["mode"] == "agent"
+
+
+@pytest.mark.parametrize(
+    ("typed", "dialled"),
+    [
+        ("9660557683", "+919660557683"),
+        ("919660557683", "+919660557683"),
+        ("+919660557683", "+919660557683"),
+        ("9660 557 683", "+919660557683"),
+        ("  9408258707  ", "+919408258707"),
+    ],
+)
+def test_a_hand_typed_number_is_normalised_before_it_reaches_a_carrier(
+    typed: str, dialled: str
+) -> None:
+    """A bare Indian mobile on a US Twilio account is read as +1.
+
+    That produced "Account not allowed to call +19660557683" on a live call --
+    a US number the user never meant to dial.
+    """
+    from app.services.call_service import _dialable
+
+    assert _dialable(typed) == dialled
+
+
+async def test_a_bridge_dials_the_normalised_numbers(client, auth_headers) -> None:
+    response = await client.post(
+        "/calls/bridge",
+        json={"operator_number": "9660557683", "to_number": "9408258707"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["operator_number"] == "+919660557683"
+    assert body["to_number"] == "+919408258707"
+
+
+async def test_an_agent_call_normalises_a_typed_number_too(client, auth_headers, agent) -> None:
+    response = await client.post(
+        "/calls",
+        json={"agent_id": agent["id"], "to_number": "9408258707"},
+        headers=auth_headers,
+    )
+    assert response.json()["to_number"] == "+919408258707"
+
+
+def test_a_twilio_error_is_rendered_as_something_actionable() -> None:
+    """Raw provider JSON in a UI tells an operator nothing."""
+    from app.services.telephony.twilio import _explain
+
+    body = (
+        '{"code":21216,"message":"Account not allowed to call +19660557683",'
+        '"more_info":"https://www.twilio.com/docs/errors/21216","status":400}'
+    )
+    explained = _explain(body)
+    assert "Geo Permissions" in explained
+    assert "country code" in explained
+    assert "more_info" not in explained
+
+
+def test_an_unrecognised_twilio_error_still_says_something() -> None:
+    from app.services.telephony.twilio import _explain
+
+    assert _explain('{"code":99999,"message":"Something odd"}') == "Something odd"
+    assert _explain("not json at all") == "not json at all"

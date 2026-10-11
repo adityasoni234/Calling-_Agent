@@ -2,18 +2,28 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, requires
 from app.api.pagination import PageParam, PageSizeParam, paginate
 from app.core.config import settings
 from app.core.errors import AppError, NotFoundError
-from app.models.call import Call, CallStatus, CallTurn, CallUsage
-from app.schemas.call import CallCreate, CallDetail, CallRead, CallTurnRead, CallUsageRead
+from app.core.permissions import Capability
+from app.models.call import Call, CallMode, CallSource, CallStatus, CallTurn, CallUsage
+from app.models.user import User
+from app.schemas.call import (
+    BridgeCallRequest,
+    CallCreate,
+    CallDetail,
+    CallRead,
+    CallTurnRead,
+    CallUsageRead,
+)
 from app.schemas.common import MessageResponse, Page
 from app.services.call_service import CallService
 from app.services.postcall_service import PostCallService
@@ -37,10 +47,21 @@ async def list_calls(
     call_status: CallStatus | None = Query(default=None, alias="status"),
     campaign_id: uuid.UUID | None = None,
     lead_id: uuid.UUID | None = None,
+    mode: CallMode | None = Query(default=None, description="agent or human"),
+    source: CallSource | None = Query(
+        default=None, description="manual, campaign, api, inbound, scheduled or internal"
+    ),
+    initiated_by: uuid.UUID | None = Query(default=None, description="Calls started by one user"),
 ) -> Page[CallRead]:
     statement = select(Call).where(Call.organization_id == user.organization_id)
     if call_status:
         statement = statement.where(Call.status == call_status)
+    if mode:
+        statement = statement.where(Call.mode == mode)
+    if source:
+        statement = statement.where(Call.source == source)
+    if initiated_by:
+        statement = statement.where(Call.initiated_by_user_id == initiated_by)
     if campaign_id:
         statement = statement.where(Call.campaign_id == campaign_id)
     if lead_id:
@@ -57,13 +78,50 @@ async def list_calls(
 @router.post(
     "", response_model=CallRead, status_code=status.HTTP_201_CREATED, summary="Place a call"
 )
-async def create_call(payload: CallCreate, db: DbSession, user: CurrentUser) -> CallRead:
+async def create_call(
+    payload: CallCreate,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.PLACE_CALLS))],
+) -> CallRead:
     call = await CallService(db).create_and_originate(
         organization_id=user.organization_id,
+        initiated_by_user_id=user.id,
+        source=CallSource.MANUAL,
+        source_detail=f"dashboard · {user.email}",
         agent_id=payload.agent_id,
         lead_id=payload.lead_id,
         to_number=payload.to_number,
         from_number=payload.from_number,
+    )
+    return CallRead.model_validate(call)
+
+
+@router.post(
+    "/bridge",
+    response_model=CallRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Call a lead yourself: we ring your phone, then connect you",
+)
+async def bridge_call(
+    payload: BridgeCallRequest,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.PLACE_CALLS))],
+) -> CallRead:
+    """A human-operated call on the same rails as the AI ones.
+
+    The operator's phone rings first; when they answer, the carrier connects
+    them to the lead. The call still gets a record, a recording and a cost line,
+    so a human's calls show up in the same reporting as the agent's.
+    """
+    call = await CallService(db).bridge_to_operator(
+        organization_id=user.organization_id,
+        initiated_by_user_id=user.id,
+        source=CallSource.MANUAL,
+        source_detail=f"manual calling · {user.email}",
+        operator_number=payload.operator_number,
+        lead_id=payload.lead_id,
+        to_number=payload.to_number,
+        record=payload.record,
     )
     return CallRead.model_validate(call)
 

@@ -51,6 +51,10 @@ logs-api: ## Tail backend logs only
 logs-worker: ## Tail worker logs (campaigns, post-call, ingestion)
 	$(COMPOSE) logs -f worker
 
+.PHONY: relive
+relive: ## Tunnel died? One command: restart it and redeploy the dashboard
+	@./scripts/relive.sh
+
 .PHONY: tunnel
 tunnel: ## Start a public tunnel and auto-update .env + the carrier webhook
 	@./scripts/tunnel.sh
@@ -86,8 +90,8 @@ lint: ## Lint and type-check both sides
 	cd frontend && npm run lint && npm run typecheck
 
 .PHONY: build-web
-build-web: ## Production build of the dashboard
-	cd frontend && npm run build
+build-web: ## Production build of both sites (customer + admin)
+	cd frontend && npm run build:all
 
 .PHONY: dev-backend
 dev-backend: ## Run the API on the host (needs postgres+redis up)
@@ -96,3 +100,8 @@ dev-backend: ## Run the API on the host (needs postgres+redis up)
 .PHONY: dev-frontend
 dev-frontend: ## Run the dashboard on the host
 	cd frontend && npm run dev
+
+.PHONY: dev-admin
+dev-admin: ## Run the platform admin panel on the host, at :5174
+	cd frontend && VITE_API_BASE_URL=http://localhost:8000/api/v1 \
+		npx vite --config vite.admin.config.ts --port 5174

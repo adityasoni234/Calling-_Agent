@@ -485,3 +485,52 @@ async def test_a_mid_sentence_final_still_waits_for_the_rest() -> None:
     assert [turn.content for turn in result.turns if turn.role == "customer"] == [
         "haan boliye kaun hai?"
     ]
+
+
+class BrokenTTS(SlowTTS):
+    """A vendor whose account has run out of credit."""
+
+    async def stream(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        raise RuntimeError("[cartesia] 402: Insufficient credits")
+        yield b""  # pragma: no cover - makes this an async generator
+
+
+async def test_a_mute_agent_ends_the_call_instead_of_burning_minutes() -> None:
+    """A dead TTS vendor used to leave the caller on an open, silent line.
+
+    The call finished as "completed" with nothing recorded, so a broken vendor
+    account looked exactly like a working call.
+    """
+    manager = ConversationManager(
+        agent=make_agent(),
+        stt=ScriptedSTT([(0.05, STTEvent(STTEventType.FINAL, text="hello", speech_final=True))]),
+        llm=MockLLMProvider(),
+        tts=BrokenTTS(),
+        sink=RecordingSink(),
+        pace_audio=False,
+    )
+    task = asyncio.create_task(manager.run())
+    result = await asyncio.wait_for(task, timeout=8)
+
+    assert result.end_reason == "tts_unavailable"
+    assert result.provider_error is not None
+    assert "cartesia" in result.provider_error
+    assert "402" in result.provider_error
+
+
+async def test_a_working_call_records_no_provider_error() -> None:
+    manager = ConversationManager(
+        agent=make_agent(),
+        stt=ScriptedSTT([(0.05, STTEvent(STTEventType.FINAL, text="ok bye", speech_final=True))]),
+        llm=MockLLMProvider(),
+        tts=SlowTTS(),
+        sink=RecordingSink(),
+        pace_audio=False,
+    )
+    task = asyncio.create_task(manager.run())
+    await asyncio.sleep(0.6)
+    await manager.stop("test")
+    result = await asyncio.wait_for(task, timeout=5)
+
+    assert result.provider_error is None
+    assert result.end_reason != "tts_unavailable"

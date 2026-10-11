@@ -7,6 +7,7 @@ backends rather than one, and as failover when a Plivo route degrades.
 from __future__ import annotations
 
 import base64
+import json
 from typing import Any
 from xml.sax.saxutils import escape
 
@@ -37,6 +38,35 @@ STATUS_MAP = {
     "failed": (TelephonyEventType.FAILED, CallStatus.FAILED),
     "canceled": (TelephonyEventType.COMPLETED, CallStatus.CANCELED),
 }
+
+
+# Twilio's raw JSON is unreadable in a UI. These are the failures that actually
+# happen in practice, phrased as what the operator should do about them.
+_ERROR_HELP = {
+    "21216": (
+        "Twilio will not dial that country. Check the number has the right country "
+        "code, then enable the destination under Voice → Geo Permissions."
+    ),
+    "21210": "The caller ID is not a number you own or have verified on Twilio.",
+    "21211": "That destination number is not valid.",
+    "21219": "Trial accounts can only call verified numbers. Verify it, or upgrade.",
+    "21610": "That number has opted out of messages from this sender.",
+    "20003": "Twilio rejected the credentials. Check the account SID and auth token.",
+}
+
+
+def _explain(body: str) -> str:
+    """Turn a Twilio error body into a sentence someone can act on."""
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        return body[:300]
+    code = str(payload.get("code", ""))
+    message = str(payload.get("message", "")).strip()
+    help_text = _ERROR_HELP.get(code)
+    if help_text:
+        return f"{message} — {help_text}" if message else help_text
+    return message or body[:300]
 
 
 class TwilioTelephonyProvider(TelephonyProvider):
@@ -85,7 +115,7 @@ class TwilioTelephonyProvider(TelephonyProvider):
             raise ProviderError(self.name, str(exc), retryable=True) from exc
 
         if response.status_code >= 400:
-            raise ProviderError(self.name, f"{response.status_code}: {response.text[:300]}")
+            raise ProviderError(self.name, _explain(response.text))
 
         payload = response.json()
         log.info("telephony.originated", provider="twilio", provider_call_id=payload.get("sid"))
@@ -116,6 +146,19 @@ class TwilioTelephonyProvider(TelephonyProvider):
             "<Response><Connect>"
             f'<Stream url="{escape(websocket_url)}" />'
             "</Connect></Response>"
+        )
+        return xml, "application/xml"
+
+    def bridge_document(
+        self, *, to_number: str, caller_id: str, record: bool = False
+    ) -> tuple[str, str]:
+        recording = ' record="record-from-answer-dual"' if record else ""
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response>"
+            f'<Dial callerId="{escape(caller_id)}"{recording} answerOnBridge="true">'
+            f"<Number>{escape(to_number)}</Number>"
+            "</Dial></Response>"
         )
         return xml, "application/xml"
 

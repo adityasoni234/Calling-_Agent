@@ -21,6 +21,7 @@ from app.models.call import Call, CallUsage
 from app.models.organization import Organization
 from app.models.pricing import PricingRate
 from app.services.base import UsageRecord
+from app.services.billing_service import BillingService
 
 log = get_logger(__name__)
 
@@ -224,6 +225,12 @@ class CostService:
 
     async def can_start_call(self, organization_id: uuid.UUID) -> tuple[bool, str | None]:
         """Checked before origination -- an in-flight call cannot be un-billed."""
+        # Credits first: a suspended or unfunded account should be told that,
+        # not given a budget message that sounds like their own setting.
+        affordable, reason = await BillingService(self.db).can_afford_call(organization_id)
+        if not affordable:
+            return False, reason
+
         state = await self.budget_state(organization_id)
         if state["daily_exceeded"]:
             return False, "Daily budget limit reached"

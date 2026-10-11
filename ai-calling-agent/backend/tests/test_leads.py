@@ -198,6 +198,46 @@ async def test_a_number_on_two_sheets_appears_under_both(
         assert page.json()["total"] == 1, "the lead must show under both sheets"
 
 
+async def test_deleting_a_sheet_with_its_leads_removes_them(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    created = await client.post(
+        "/leads/import",
+        files={"file": ("gone.csv", b"name,phone\nA,9876500071\nB,9876500072\n", "text/csv")},
+        headers=auth_headers,
+    )
+    list_id = created.json()["lead_list"]["id"]
+
+    removed = await client.delete(f"/leads/lists/{list_id}?delete_leads=true", headers=auth_headers)
+    assert removed.status_code == 200
+    assert "2 lead(s)" in removed.json()["message"]
+    assert (await client.get("/leads", headers=auth_headers)).json()["total"] == 0
+
+
+async def test_a_lead_on_two_sheets_survives_deleting_one(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    """Otherwise the other tab silently loses rows the user never touched."""
+    rows = b"name,phone\nShared Person,9876500081\n"
+    first = await client.post(
+        "/leads/import", files={"file": ("a.csv", rows, "text/csv")}, headers=auth_headers
+    )
+    second = await client.post(
+        "/leads/import", files={"file": ("b.csv", rows, "text/csv")}, headers=auth_headers
+    )
+
+    removed = await client.delete(
+        f"/leads/lists/{first.json()['lead_list']['id']}?delete_leads=true", headers=auth_headers
+    )
+    assert "another sheet" in removed.json()["message"]
+
+    assert (await client.get("/leads", headers=auth_headers)).json()["total"] == 1
+    still_there = await client.get(
+        f"/leads?list_id={second.json()['lead_list']['id']}", headers=auth_headers
+    )
+    assert still_there.json()["total"] == 1
+
+
 async def test_deleting_a_sheet_keeps_the_leads(
     client: AsyncClient, auth_headers: dict[str, str]
 ) -> None:
@@ -209,6 +249,8 @@ async def test_deleting_a_sheet_keeps_the_leads(
     )
     list_id = created.json()["lead_list"]["id"]
 
+    # Without the flag the leads are still spared, which is what the API default
+    # protects: an integration must not be able to destroy contacts by accident.
     removed = await client.delete(f"/leads/lists/{list_id}", headers=auth_headers)
     assert removed.status_code == 200
 

@@ -4,36 +4,41 @@ export default {
   theme: {
     extend: {
       colors: {
-        // The brand blue, unchanged — everything else is tuned around it.
+        // Deep evergreen rather than an electric blue: restrained, and it reads
+        // as considered rather than loud next to a lot of white.
         brand: {
-          50: '#eef4ff',
-          100: '#d9e6ff',
-          200: '#bcd2ff',
-          300: '#8eb4ff',
-          400: '#598bff',
-          500: '#3364fb',
-          600: '#1d43f0',
-          700: '#1832dc',
-          800: '#1a2cb2',
-          900: '#1b2c8c',
-          950: '#141d5c',
+          50: '#f0f6f3',
+          100: '#dbeae3',
+          200: '#b9d5c8',
+          300: '#8bb8a5',
+          400: '#5a9680',
+          500: '#3a7a63',
+          600: '#2a614e',
+          700: '#224f40',
+          800: '#1d4035',
+          900: '#19352d',
+          950: '#0d1f1a',
         },
-        // A slightly warmer neutral than slate: less clinical under the blue.
+        // Warm greys on a paper ground. A cool slate under this much white
+        // looks clinical; the warmth is what makes it read as printed.
         ink: {
-          50: '#f7f8fa',
-          100: '#eef0f4',
-          200: '#dfe3ea',
-          300: '#c6ccd8',
-          400: '#98a1b3',
-          500: '#6b7488',
-          600: '#4e5668',
-          700: '#3b4252',
-          800: '#252b38',
-          900: '#161b26',
-          950: '#0d1017',
+          50: '#faf9f7',
+          100: '#f2f0ec',
+          200: '#e5e1da',
+          300: '#cdc7bd',
+          400: '#9c948a',
+          500: '#746c62',
+          600: '#57514a',
+          700: '#423d38',
+          800: '#2b2824',
+          900: '#1a1816',
+          950: '#0f0e0d',
         },
       },
       fontFamily: {
+        // A real serif for headings. This is the single biggest signal that
+        // the product is considered rather than generated from a template.
+        display: ['Newsreader', 'ui-serif', 'Georgia', 'serif'],
         sans: ['Inter var', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       fontSize: {
@@ -41,18 +46,21 @@ export default {
         '2xs': ['0.6875rem', { lineHeight: '1rem', letterSpacing: '0.02em' }],
       },
       borderRadius: {
-        xl: '0.875rem',
-        '2xl': '1.125rem',
+        // Softer than before. Editorial layouts lean on whitespace and rules,
+        // so corners stop doing the work.
+        xl: '0.625rem',
+        '2xl': '0.875rem',
       },
       boxShadow: {
-        // Two-layer shadows: a tight contact shadow plus a soft ambient one.
-        card: '0 1px 2px 0 rgb(13 16 23 / 0.04), 0 4px 16px -4px rgb(13 16 23 / 0.06)',
-        lift: '0 2px 4px 0 rgb(13 16 23 / 0.05), 0 12px 32px -8px rgb(13 16 23 / 0.12)',
-        glow: '0 0 0 1px rgb(29 67 240 / 0.12), 0 8px 24px -6px rgb(29 67 240 / 0.28)',
+        // Almost nothing. Separation comes from hairline rules and space, not
+        // from floating every panel off the page.
+        card: '0 1px 2px 0 rgb(26 24 22 / 0.03)',
+        lift: '0 1px 3px 0 rgb(26 24 22 / 0.06), 0 8px 24px -10px rgb(26 24 22 / 0.14)',
+        glow: '0 1px 2px 0 rgb(26 24 22 / 0.08)',
       },
       backgroundImage: {
-        'brand-sheen': 'linear-gradient(135deg, #1d43f0 0%, #3364fb 55%, #598bff 100%)',
-        'ink-deep': 'linear-gradient(180deg, #161b26 0%, #0d1017 100%)',
+        'brand-sheen': 'linear-gradient(135deg, #224f40 0%, #2a614e 60%, #3a7a63 100%)',
+        'ink-deep': 'linear-gradient(180deg, #faf9f7 0%, #f2f0ec 100%)',
       },
       keyframes: {
         'fade-up': {
@@ -62,10 +70,15 @@ export default {
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
         },
+        'slide-in': {
+          from: { transform: 'translateX(-100%)' },
+          to: { transform: 'translateX(0)' },
+        },
       },
       animation: {
         'fade-up': 'fade-up 0.28s cubic-bezier(0.16, 1, 0.3, 1) both',
         shimmer: 'shimmer 1.6s infinite',
+        'slide-in': 'slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both',
       },
     },
   },

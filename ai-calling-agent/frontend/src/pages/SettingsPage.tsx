@@ -4,6 +4,7 @@ import { Alert } from '@/components/ui/Alert'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Field } from '@/components/ui/Field'
 import { Select } from '@/components/ui/Inputs'
 import { Modal } from '@/components/ui/Modal'
@@ -46,12 +47,10 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-xl font-semibold text-ink-900">Settings</h1>
-        <p className="mt-1 text-sm text-ink-500">
-          Provider wiring, budgets, and the verified rates the cost engine uses.
-        </p>
-      </header>
+      <PageHeader
+        title="Settings"
+        description="Providers, budgets, call pricing and the integration surface your CRM plugs into."
+      />
 
       {data.using_mocks && (
         <Alert tone="warning">

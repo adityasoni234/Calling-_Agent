@@ -5,12 +5,12 @@ type Size = 'sm' | 'md'
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    'bg-brand-sheen text-white shadow-glow hover:brightness-[1.07] active:brightness-95 focus-visible:outline-brand-600',
+    'bg-brand-700 text-white hover:bg-brand-800 active:bg-brand-900 focus-visible:outline-brand-700',
   secondary:
-    'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 shadow-card hover:bg-ink-50 hover:ring-ink-300 focus-visible:outline-ink-400',
+    'bg-white text-ink-700 ring-1 ring-inset ring-ink-300/70 hover:bg-ink-50 hover:ring-ink-400/70 focus-visible:outline-ink-500',
   ghost: 'text-ink-500 hover:bg-ink-100 hover:text-ink-800 focus-visible:outline-ink-400',
   danger:
-    'bg-red-600 text-white shadow-card hover:bg-red-700 active:bg-red-800 focus-visible:outline-red-600',
+    'bg-red-700 text-white hover:bg-red-800 active:bg-red-900 focus-visible:outline-red-700',
 }
 
 const SIZES: Record<Size, string> = {

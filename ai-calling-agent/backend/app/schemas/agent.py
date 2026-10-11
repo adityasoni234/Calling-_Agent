@@ -134,8 +134,14 @@ class AgentGenerateRequest(BaseModel):
 
     brief: str = Field(
         min_length=20,
-        max_length=2000,
-        description="Plain language: who you are, who you're calling, what a good call achieves.",
+        # Generous on purpose: people paste a prompt they already wrote, or a
+        # whole product brief. Rejecting that forces them to cut down the most
+        # useful input they could possibly give us.
+        max_length=40_000,
+        description=(
+            "Either a few plain-language lines, or a full brief or system prompt "
+            "you already have. Detail is used, not summarised away."
+        ),
     )
     company_name: str = Field(default="", max_length=200)
     language: AgentLanguage = AgentLanguage.AUTO

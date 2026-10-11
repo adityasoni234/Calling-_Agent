@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { Alert } from '@/components/ui/Alert'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Field } from '@/components/ui/Field'
 import { TextArea } from '@/components/ui/Inputs'
@@ -31,23 +32,19 @@ export function KnowledgePage() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-ink-900">Knowledge Base</h1>
-          <p className="mt-1 text-sm text-ink-500">
-            What the agent quotes instead of inventing. Retrieved only when a turn needs facts.
-          </p>
-        </div>
-        <Button onClick={() => setCreating(true)}>New knowledge base</Button>
-      </header>
+      <PageHeader
+        title="Answers"
+        description="Answers your agent can give instead of saying it will check. Add the questions customers actually ask."
+        actions={<Button onClick={() => setCreating(true)}>New knowledge base</Button>}
+      />
 
       {isLoading ? (
         <p className="py-8 text-center text-sm text-ink-500">Loading…</p>
       ) : !bases?.length ? (
         <Card>
           <EmptyState
-            title="No knowledge base yet"
-            hint="Create one, then upload documents or add FAQs."
+            title="No answers added yet"
+            hint="Make a set and name it something plain, like Pricing or Common questions. Then add a question and its answer, or upload a document you already have."
           />
         </Card>
       ) : (
@@ -114,7 +111,7 @@ function KnowledgeBasePanel({ kbId }: { kbId: string }) {
 
       <Card
         title="Documents"
-        description="PDF, DOCX, TXT, and Markdown are extracted, chunked, and embedded."
+        description="Add a question and answer, or upload a file you already have — PDF, Word or text. Your agent reads it and can quote from it on a call."
         actions={
           <div className="flex gap-2">
             <input
@@ -145,7 +142,7 @@ function KnowledgeBasePanel({ kbId }: { kbId: string }) {
       >
         {uploadError && <Alert tone="error">{uploadError}</Alert>}
         {!documents?.length ? (
-          <EmptyState title="Nothing here yet" hint="Upload a file or add an FAQ entry." />
+          <EmptyState title="Nothing in here yet" hint="Start with one question a customer always asks, and the answer you would give." />
         ) : (
           <Table headers={['Title', 'Type', 'Status', 'Chunks', '']}>
             {documents.map((document) => (
@@ -190,8 +187,8 @@ function SearchPanel({ kbId }: { kbId: string }) {
 
   return (
     <Card
-      title="Test retrieval"
-      description="Runs exactly what the agent runs, so you can see what it would be given."
+      title="Try it"
+      description="Type a question the way a customer would ask it, and see exactly what your agent would find."
     >
       <form
         className="flex gap-2"
@@ -203,7 +200,7 @@ function SearchPanel({ kbId }: { kbId: string }) {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Ask what a customer would ask…"
+          placeholder="e.g. how much do you charge?"
           className="flex-1 rounded-lg border-0 px-3 py-2 text-sm ring-1 ring-inset ring-ink-200 focus:ring-2 focus:ring-brand-500"
         />
         <Button type="submit" loading={search.isPending}>Search</Button>
@@ -235,7 +232,7 @@ function CreateBaseDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateKnowledgeBase()
 
   return (
-    <Modal open title="New knowledge base" onClose={onClose}>
+    <Modal open title="New set of answers" onClose={onClose}>
       <div className="space-y-4">
         <Field label="Name" value={name} onChange={(event) => setName(event.target.value)} />
         <TextArea
@@ -267,7 +264,7 @@ function FaqDialog({ kbId, onClose }: { kbId: string; onClose: () => void }) {
   const add = useAddFaq(kbId)
 
   return (
-    <Modal open title="Add an FAQ" onClose={onClose}>
+    <Modal open title="Add a question and answer" onClose={onClose}>
       <div className="space-y-4">
         <Field label="Question" value={question} onChange={(event) => setQuestion(event.target.value)} />
         <TextArea
@@ -275,7 +272,7 @@ function FaqDialog({ kbId, onClose }: { kbId: string; onClose: () => void }) {
           rows={5}
           value={answer}
           onChange={(event) => setAnswer(event.target.value)}
-          hint="Write it the way you'd want it said on a call."
+          hint="Write it exactly as you would say it out loud on the phone."
         />
       </div>
       <footer className="mt-4 flex justify-end gap-2 border-t border-ink-100 pt-4">

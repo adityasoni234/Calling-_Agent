@@ -55,7 +55,8 @@ class Settings(BaseSettings):
     # straight from the environment, before any validator can normalise them,
     # so a comma-separated CORS_ORIGINS would fail to parse. Read it through
     # `cors_origin_list`.
-    cors_origins: str = "http://localhost:5173"
+    #: Both dev servers: 5173 is the customer app, 5174 the admin panel.
+    cors_origins: str = "http://localhost:5173,http://localhost:5174"
 
     # --- public reachability -------------------------------------------
     # The https URL telephony providers call back on. Required for real calls;
@@ -99,6 +100,27 @@ class Settings(BaseSettings):
     stale_call_timeout_minutes: int = 30
     #: Largest lead CSV accepted by any upload endpoint.
     max_csv_bytes: int = 10 * 1024 * 1024
+    #: Country code assumed for a number typed without one. Wrong here means a
+    #: carrier silently dials the wrong country -- a bare Indian mobile handed
+    #: to a US account is read as +1 and the call is refused.
+    default_country_code: str = "+91"
+
+    # --- commercial ----------------------------------------------------
+    #: What a call sells for, as a multiple of what the providers charge us.
+    #: A multiplier rather than a fixed per-minute price because telephony to
+    #: the UK costs six times India -- one flat price would lose money on one
+    #: region or be uncompetitive in the other.
+    credit_markup_multiplier: float = 3.0
+    #: Credits given to a brand-new organization so it can place a test call.
+    trial_credits: float = 500.0
+
+    # --- payments ------------------------------------------------------
+    #: Which provider to use. Anything unset leaves payments refusing clearly
+    #: rather than pretending to work.
+    payment_provider: str = "razorpay"
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
 
     # --- model providers -----------------------------------------------
     anthropic_api_key: str = ""

@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal'
 import { EmptyState, Pager, Table } from '@/components/ui/Table'
 import {
   useAgents,
+  useBridgeCall,
   useCreateLead,
   useDeleteLead,
   useImportLeads,
@@ -58,8 +59,10 @@ export function LeadsPage() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-ink-900">Leads</h1>
-          <p className="mt-1 text-sm text-ink-500">The people your agents call, and what came of it.</p>
+          <h1 className="text-xl font-semibold tracking-tight text-ink-900">Leads</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-500">
+            The people your agents call, and what came of it. Each uploaded sheet gets its own tab.
+          </p>
         </div>
         <div className="flex gap-2">
           <input
@@ -193,6 +196,22 @@ export function LeadsPage() {
                   ? 'Every lead that was on this sheet has since been deleted.'
                   : 'Import a CSV exported from your CRM — name and phone are the only required columns — or add one by hand to try a call.'
             }
+            action={
+              search || status || sheet ? undefined : (
+                <>
+                  <Button onClick={() => fileInput.current?.click()}>Import a CSV</Button>
+                  <Button variant="secondary" onClick={() => setCreating(true)}>
+                    Add one by hand
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => downloadCsv('leads-template.csv', leadTemplateCsv())}
+                  >
+                    Download template
+                  </Button>
+                </>
+              )
+            }
           />
         ) : (
           <>
@@ -295,12 +314,31 @@ export function CallDialog({ lead, onClose }: { lead: Lead; onClose: () => void 
   const [agentId, setAgentId] = useState('')
   const resolved = agentId || (active.length === 1 ? active[0].id : '')
   const [error, setError] = useState<string | null>(null)
+  const [by, setBy] = useState<'agent' | 'me'>('agent')
+  // Remembered so you are not retyping your own number on every call.
+  const [myNumber, setMyNumber] = useState(() => {
+    try {
+      return localStorage.getItem('operator_number') ?? ''
+    } catch {
+      return ''
+    }
+  })
   const place = usePlaceCall()
+  const bridge = useBridgeCall()
 
   const submit = async () => {
     setError(null)
     try {
-      await place.mutateAsync({ agent_id: resolved, lead_id: lead.id })
+      if (by === 'me') {
+        try {
+          localStorage.setItem('operator_number', myNumber.trim())
+        } catch {
+          // A browser that blocks storage should not block the call.
+        }
+        await bridge.mutateAsync({ operator_number: myNumber.trim(), lead_id: lead.id })
+      } else {
+        await place.mutateAsync({ agent_id: resolved, lead_id: lead.id })
+      }
       onClose()
     } catch (err) {
       setError(err instanceof ApiError || err instanceof NetworkError ? err.message : 'Could not place the call')
@@ -314,7 +352,39 @@ export function CallDialog({ lead, onClose }: { lead: Lead; onClose: () => void 
         <p className="text-sm text-ink-600">
           Dialing <span className="font-medium tabular-nums">{lead.phone_number}</span>
         </p>
-        {active.length === 0 ? (
+
+        <div className="flex gap-2">
+          {(
+            [
+              ['agent', 'AI agent calls'],
+              ['me', 'I call them'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setBy(value)}
+              className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
+                by === value
+                  ? 'bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200'
+                  : 'bg-white text-ink-500 ring-1 ring-inset ring-ink-200 hover:bg-ink-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {by === 'me' ? (
+          <Field
+            label="Ring me on"
+            value={myNumber}
+            onChange={(event) => setMyNumber(event.target.value)}
+            placeholder="+919812345678"
+            hint="Your phone rings first. Answer it and you are connected to the lead — so their phone only rings once you are on the line."
+          />
+        ) : null}
+        {by === 'me' ? null : active.length === 0 ? (
           <Alert tone="warning">
             No active agent yet. Create one first — it decides what gets said on the call.
           </Alert>
@@ -336,8 +406,12 @@ export function CallDialog({ lead, onClose }: { lead: Lead; onClose: () => void 
       </div>
       <footer className="mt-4 flex justify-end gap-2 border-t border-ink-100 pt-4">
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button onClick={submit} loading={place.isPending} disabled={!resolved}>
-          Place call
+        <Button
+          onClick={submit}
+          loading={place.isPending || bridge.isPending}
+          disabled={by === 'me' ? myNumber.trim().length < 6 : !resolved}
+        >
+          {by === 'me' ? 'Ring my phone' : 'Place call'}
         </Button>
       </footer>
     </Modal>

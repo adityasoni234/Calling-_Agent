@@ -35,3 +35,4 @@ firebase-debug.log
 uploads/
 *.log
 *.tsbuildinfo
+ADMIN_CREDENTIALS.txt

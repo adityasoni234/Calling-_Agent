@@ -28,6 +28,9 @@ class UserRead(BaseModel):
     full_name: str
     role: UserRole
     is_active: bool
+    #: The client decides whether to show the platform surface from this, so
+    #: omitting it made the admin panel invisible to its own administrator.
+    is_platform_admin: bool = False
     last_login_at: datetime | None = None
     created_at: datetime
 

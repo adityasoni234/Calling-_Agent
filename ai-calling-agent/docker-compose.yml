@@ -96,7 +96,14 @@ services:
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
+      - ./frontend/admin.html:/app/admin.html
       - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/vite.admin.config.ts:/app/vite.admin.config.ts
+      # Mounted too, or the container keeps whatever was baked into the image
+      # at build time. A stale Tailwind config fails the whole stylesheet --
+      # every page then loads unstyled with an "unknown class" overlay.
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./frontend/postcss.config.js:/app/postcss.config.js
     depends_on:
       - backend
 

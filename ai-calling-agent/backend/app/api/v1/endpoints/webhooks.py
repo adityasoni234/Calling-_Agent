@@ -16,7 +16,7 @@ from app.api.deps import DbSession
 from app.core.config import settings
 from app.core.errors import NotFoundError, PermissionDeniedError
 from app.core.logging import get_logger
-from app.models.call import Call
+from app.models.call import Call, CallMode
 from app.services.call_service import CallService
 from app.services.campaign_service import CampaignService
 from app.services.registry import get_telephony
@@ -55,7 +55,17 @@ async def answer(provider: str, call_id: uuid.UUID, request: Request, db: DbSess
     if call is None:
         raise NotFoundError("Call not found")
 
-    body, content_type = get_telephony(provider).answer_document(websocket_url=_media_url(call_id))
+    adapter = get_telephony(provider)
+    if call.mode is CallMode.HUMAN:
+        # The operator just picked up. Connect them to the lead rather than
+        # opening a media socket -- there is no AI on this call.
+        body, content_type = adapter.bridge_document(
+            to_number=call.to_number, caller_id=call.from_number, record=True
+        )
+        log.info("webhook.answer_bridge", call_id=str(call_id), provider=provider)
+        return Response(content=body, media_type=content_type)
+
+    body, content_type = adapter.answer_document(websocket_url=_media_url(call_id))
     log.info("webhook.answer", call_id=str(call_id), provider=provider)
     return Response(content=body, media_type=content_type)
 

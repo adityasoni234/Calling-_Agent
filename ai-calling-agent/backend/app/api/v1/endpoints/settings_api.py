@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, requires
 from app.core.config import settings as app_settings
 from app.core.errors import NotFoundError
+from app.core.permissions import Capability
 from app.models.organization import Organization
 from app.models.pricing import PricingRate
+from app.models.user import User
 from app.schemas.common import MessageResponse
 from app.schemas.settings_schema import (
     OrganizationUpdate,
@@ -102,7 +106,9 @@ async def list_rates(db: DbSession, user: CurrentUser) -> list[PricingRateRead]:
     summary="Record a rate you have verified on a vendor's rate card",
 )
 async def create_rate(
-    payload: PricingRateCreate, db: DbSession, user: CurrentUser
+    payload: PricingRateCreate,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_SETTINGS))],
 ) -> PricingRateRead:
     """`source_url` and `verified_at` are required by the schema. Until a rate
     exists for a component, calls using it are flagged `cost_incomplete` rather

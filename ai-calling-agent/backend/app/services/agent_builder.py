@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator
 
 from app.core.errors import AppError
 from app.core.logging import get_logger
@@ -131,6 +131,56 @@ class AgentBlueprint(BaseModel):
     forbidden_rules: list[str] = Field(default_factory=list, max_length=8)
     ending_rules: list[str] = Field(default_factory=list, max_length=5)
 
+    @field_validator(
+        "secondary_objectives",
+        "qualification_questions",
+        "forbidden_rules",
+        "ending_rules",
+        "objection_handling",
+        mode="before",
+    )
+    @classmethod
+    def _trim_to_cap(cls, value: object, info: ValidationInfo) -> object:
+        """Keep the first N rather than rejecting the whole draft.
+
+        A rich brief naturally yields more objectives or rules than these caps.
+        Throwing away a good sixteen-second generation because one list had six
+        items instead of five is the wrong trade -- the caps exist to keep the
+        prompt small, and the first items are the ones the model ranked highest.
+        """
+        if not isinstance(value, list):
+            return value
+        caps = {
+            "secondary_objectives": 5,
+            "qualification_questions": 6,
+            "forbidden_rules": 8,
+            "ending_rules": 5,
+            "objection_handling": 6,
+        }
+        cap = caps.get(info.field_name or "")
+        if cap is not None and len(value) > cap:
+            log.info(
+                "agent_builder.trimmed", field=info.field_name, kept=cap, dropped=len(value) - cap
+            )
+            return value[:cap]
+        return value
+
+    @field_validator("role_title", "personality", "primary_objective", "greeting", mode="before")
+    @classmethod
+    def _trim_text(cls, value: object, info: ValidationInfo) -> object:
+        """Same reasoning as the list caps: trim, do not discard the draft."""
+        caps = {
+            "role_title": 120,
+            "personality": 600,
+            "primary_objective": 400,
+            "greeting": 300,
+        }
+        cap = caps.get(info.field_name or "")
+        if isinstance(value, str) and cap and len(value) > cap:
+            log.info("agent_builder.trimmed_text", field=info.field_name, length=len(value))
+            return value[:cap].rstrip()
+        return value
+
     @field_validator("name")
     @classmethod
     def _must_be_a_person(cls, value: str) -> str:
@@ -174,15 +224,61 @@ class AgentBlueprint(BaseModel):
         return pairs
 
 
+#: Models emit these when a field cannot be filled from the source material.
+#: An agent called "<UNKNOWN>" would introduce itself that way on a live call.
+_PLACEHOLDERS = ("<unknown>", "n/a", "not specified", "unspecified", "none provided")
+
+
+def _is_placeholder(value: str) -> bool:
+    return value.strip().lower() in _PLACEHOLDERS
+
+
+def _explain_failure(exc: Exception) -> str:
+    """Say what the user can actually do about it."""
+    detail = str(exc).lower()
+    if "401" in detail or "invalid x-api-key" in detail or "authentication" in detail:
+        return (
+            "The AI provider rejected our API key. It has expired or been revoked — "
+            "add a new one under Settings, then try again."
+        )
+    if "429" in detail or "rate limit" in detail:
+        return "The AI provider is rate limiting us. Wait a minute and try again."
+    if "credit" in detail or "402" in detail or "billing" in detail:
+        return "The AI provider account is out of credit. Top it up, then try again."
+    return "Could not generate the agent. Try again, or write it by hand."
+
+
 async def generate_blueprint(
     *, brief: str, company_name: str, language: AgentLanguage = AgentLanguage.AUTO
 ) -> tuple[AgentBlueprint, list[UsageRecord]]:
+    text = brief.strip()
+    # Someone who pastes a written brief or a full system prompt has given us
+    # the most specific input we will ever get. Paraphrasing it into generic
+    # sales copy throws that away -- the instruction below says to mine it.
+    detailed = len(text) > 1200 or text.count("\n") > 12
+
     prompt = (
         f"Company: {company_name or 'the company'}\n"
         f"Preferred language: {language.value}\n\n"
-        f"What this agent should do:\n{brief.strip()}\n\n"
-        "Write the configuration."
+        f"Source material:\n{text}\n\n"
     )
+    if detailed:
+        prompt += (
+            "This is a detailed brief, and it is authoritative. Build the "
+            "configuration FROM it, not merely inspired by it:\n"
+            "- Keep the exact persona name, role and company it specifies.\n"
+            "- Carry over its specific questions, objection responses and "
+            "prohibitions verbatim where they fit a field, rather than "
+            "rewriting them into something blander.\n"
+            "- Keep its domain vocabulary and any product or regulatory terms.\n"
+            "- Where it is silent on a field, infer something consistent with "
+            "its tone. Where it is explicit, follow it exactly.\n"
+            "- If it is longer than the fields can hold, keep the parts that "
+            "change what the agent SAYS, and drop background and rationale.\n\n"
+            "Write the configuration."
+        )
+    else:
+        prompt += "Write the configuration."
 
     try:
         data, usage = await get_llm().complete_json(
@@ -193,8 +289,10 @@ async def generate_blueprint(
         )
     except Exception as exc:
         log.error("agent_builder.llm_failed", error=str(exc))
+        # "Try again" is bad advice when the cause is a dead API key -- retrying
+        # fails identically and the user never learns what to fix.
         raise AppError(
-            "Could not generate the agent. Try again, or write it by hand.",
+            _explain_failure(exc),
             code="generation_failed",
             status_code=502,
         ) from exc
@@ -208,6 +306,24 @@ async def generate_blueprint(
             code="generation_invalid",
             status_code=502,
         ) from exc
+
+    # A model that could not read the brief returns placeholders rather than
+    # failing. Saving that gives the customer an agent that opens the call with
+    # "Hi, this is <UNKNOWN>".
+    empty = [
+        field
+        for field in ("name", "role_title", "primary_objective", "greeting")
+        if _is_placeholder(str(getattr(blueprint, field, "")))
+    ]
+    if empty:
+        log.warning("agent_builder.placeholders", fields=empty)
+        raise AppError(
+            "The brief did not give enough to work from — "
+            f"{', '.join(f.replace('_', ' ') for f in empty)} came back empty. "
+            "Say who the agent is, who they are calling, and what a good call achieves.",
+            code="generation_incomplete",
+            status_code=502,
+        )
 
     log.info("agent_builder.generated", name=blueprint.name)
     return blueprint, usage

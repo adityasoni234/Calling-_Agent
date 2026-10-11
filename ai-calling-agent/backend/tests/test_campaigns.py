@@ -468,3 +468,71 @@ async def test_campaign_import_rejects_a_non_csv(
         headers=auth_headers,
     )
     assert response.status_code == 422
+
+
+async def test_a_whole_sheet_can_be_added_to_a_campaign(
+    client: AsyncClient, auth_headers: dict, agent: dict
+) -> None:
+    """Dialling an uploaded list should not mean hand-picking its leads."""
+    imported = await client.post(
+        "/leads/import",
+        files={"file": ("march.csv", b"name,phone\nA,9876600001\nB,9876600002\n", "text/csv")},
+        headers=auth_headers,
+    )
+    list_id = imported.json()["lead_list"]["id"]
+    campaign = await _make_campaign(client, auth_headers, agent)
+
+    added = await client.post(
+        f"/campaigns/{campaign['id']}/leads/from-sheet",
+        json={"lead_list_id": list_id},
+        headers=auth_headers,
+    )
+    assert added.status_code == 200, added.text
+    assert "2 lead(s)" in added.json()["message"]
+
+    listed = await client.get(f"/campaigns/{campaign['id']}/leads", headers=auth_headers)
+    assert listed.json()["total"] == 2
+
+
+async def test_adding_a_sheet_twice_does_not_duplicate_anyone(
+    client: AsyncClient, auth_headers: dict, agent: dict
+) -> None:
+    imported = await client.post(
+        "/leads/import",
+        files={"file": ("again.csv", b"name,phone\nA,9876600011\n", "text/csv")},
+        headers=auth_headers,
+    )
+    list_id = imported.json()["lead_list"]["id"]
+    campaign = await _make_campaign(client, auth_headers, agent)
+
+    for _ in range(2):
+        await client.post(
+            f"/campaigns/{campaign['id']}/leads/from-sheet",
+            json={"lead_list_id": list_id},
+            headers=auth_headers,
+        )
+
+    listed = await client.get(f"/campaigns/{campaign['id']}/leads", headers=auth_headers)
+    assert listed.json()["total"] == 1
+
+
+async def test_a_sheet_never_adds_do_not_call_leads(
+    client: AsyncClient, auth_headers: dict, agent: dict
+) -> None:
+    """A spreadsheet must not be able to override someone's opt-out."""
+    imported = await client.post(
+        "/leads/import",
+        files={"file": ("optout.csv", b"name,phone\nStop Calling,9876600021\n", "text/csv")},
+        headers=auth_headers,
+    )
+    list_id = imported.json()["lead_list"]["id"]
+    lead_id = (await client.get("/leads", headers=auth_headers)).json()["items"][0]["id"]
+    await client.patch(f"/leads/{lead_id}", json={"status": "do_not_call"}, headers=auth_headers)
+
+    campaign = await _make_campaign(client, auth_headers, agent)
+    added = await client.post(
+        f"/campaigns/{campaign['id']}/leads/from-sheet",
+        json={"lead_list_id": list_id},
+        headers=auth_headers,
+    )
+    assert "0 lead(s)" in added.json()["message"]

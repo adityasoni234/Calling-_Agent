@@ -203,3 +203,113 @@ def test_a_real_persona_name_survives_untouched() -> None:
         greeting="Hello.",
     )
     assert blueprint.name == "Riya"
+
+
+def test_a_dead_api_key_is_reported_as_a_key_problem() -> None:
+    """ "Try again" is useless advice when every retry fails identically."""
+    from app.services.agent_builder import _explain_failure
+
+    message = _explain_failure(
+        Exception('[anthropic] 401: {"error":{"message":"invalid x-api-key"}}')
+    )
+    assert "API key" in message
+    assert "Settings" in message
+    assert "Try again, or write it by hand" not in message
+
+
+def test_an_out_of_credit_account_is_reported_as_billing() -> None:
+    from app.services.agent_builder import _explain_failure
+
+    assert "credit" in _explain_failure(Exception("[cartesia] 402: Insufficient credits")).lower()
+
+
+def test_an_unknown_failure_keeps_the_generic_advice() -> None:
+    from app.services.agent_builder import _explain_failure
+
+    assert "write it by hand" in _explain_failure(Exception("something odd happened"))
+
+
+async def test_a_long_pasted_prompt_is_accepted(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    """A written system prompt is the best input we can get; 2,000 chars refused it."""
+    brief = (
+        "# STOCKVALA — AI VOICE SALES CLOSER\n"
+        "## Master System Prompt | CRM + MT5 Manager\n\n" + ("Detailed instruction line.\n" * 400)
+    )
+    assert len(brief) > 2000
+
+    response = await client.post("/agents/generate", json={"brief": brief}, headers=auth_headers)
+    assert response.status_code != 422, response.text
+
+
+async def test_a_brief_beyond_the_hard_limit_says_which_field_is_too_long(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    """ "Input validation failed" leaves the user guessing what to change."""
+    response = await client.post(
+        "/agents/generate", json={"brief": "x" * 40_001}, headers=auth_headers
+    )
+    assert response.status_code == 422
+    message = response.json()["error"]["message"]
+    assert "brief" in message.lower()
+    assert "longer than allowed" in message
+    assert message != "Input validation failed"
+
+
+async def test_a_missing_field_is_named_too(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    response = await client.post("/agents/generate", json={}, headers=auth_headers)
+    assert response.status_code == 422
+    assert "brief" in response.json()["error"]["message"].lower()
+
+
+def test_placeholder_values_are_recognised() -> None:
+    """An agent named "<UNKNOWN>" would introduce itself that way on a live call."""
+    from app.services.agent_builder import _is_placeholder
+
+    for bad in ["<UNKNOWN>", "<unknown>", " N/A ", "not specified", "None provided"]:
+        assert _is_placeholder(bad), bad
+    for good in ["Kabir", "Senior Consultant", "Riya"]:
+        assert not _is_placeholder(good), good
+
+
+def test_an_over_long_list_is_trimmed_not_rejected() -> None:
+    """A rich brief yields six objectives; binning the whole draft over one is wrong."""
+    from app.services.agent_builder import AgentBlueprint
+
+    blueprint = AgentBlueprint.model_validate(
+        {
+            "name": "Kabir",
+            "role_title": "Consultant",
+            "personality": "Warm.",
+            "primary_objective": "Book a demo.",
+            "greeting": "Hello.",
+            "secondary_objectives": [f"objective {i}" for i in range(9)],
+            "qualification_questions": [f"question {i}" for i in range(11)],
+            "forbidden_rules": [f"rule {i}" for i in range(14)],
+        }
+    )
+    assert len(blueprint.secondary_objectives) == 5
+    assert len(blueprint.qualification_questions) == 6
+    assert len(blueprint.forbidden_rules) == 8
+    # The highest-ranked items are the ones kept.
+    assert blueprint.secondary_objectives[0] == "objective 0"
+
+
+def test_over_long_text_is_trimmed_not_rejected() -> None:
+    from app.services.agent_builder import AgentBlueprint
+
+    blueprint = AgentBlueprint.model_validate(
+        {
+            "name": "Kabir",
+            "role_title": "x" * 400,
+            "personality": "y" * 900,
+            "primary_objective": "Book a demo.",
+            "greeting": "z" * 700,
+        }
+    )
+    assert len(blueprint.role_title) <= 120
+    assert len(blueprint.personality) <= 600
+    assert len(blueprint.greeting) <= 300

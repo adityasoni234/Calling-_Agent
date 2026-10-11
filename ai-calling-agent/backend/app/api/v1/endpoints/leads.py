@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, requires
 from app.api.pagination import PageParam, PageSizeParam, paginate
 from app.core.config import settings
 from app.core.errors import NotFoundError, ValidationFailedError
+from app.core.permissions import Capability
 from app.models.call import Call
 from app.models.lead import Lead, LeadStatus
 from app.models.lead_list import LeadList, LeadListMember
+from app.models.user import User
 from app.schemas.call import CallRead
 from app.schemas.common import MessageResponse, Page
 from app.schemas.lead import (
@@ -22,6 +25,7 @@ from app.schemas.lead import (
     LeadRead,
     LeadUpdate,
 )
+from app.services.campaign_service import ACTIVE_CALL_STATUSES
 from app.services.lead_service import LeadService
 
 router = APIRouter(prefix="/leads", tags=["leads"])
@@ -80,14 +84,20 @@ async def list_leads(
 @router.post(
     "", response_model=LeadRead, status_code=status.HTTP_201_CREATED, summary="Create a lead"
 )
-async def create_lead(payload: LeadCreate, db: DbSession, user: CurrentUser) -> LeadRead:
+async def create_lead(
+    payload: LeadCreate,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_LEADS))],
+) -> LeadRead:
     lead = await LeadService(db).create(user.organization_id, payload.model_dump())
     return LeadRead.model_validate(lead)
 
 
 @router.post("/import", response_model=ImportResult, summary="Bulk import leads from CSV")
 async def import_leads(
-    db: DbSession, user: CurrentUser, file: UploadFile = File(...)
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_LEADS))],
+    file: UploadFile = File(...),
 ) -> ImportResult:
     if not (file.filename or "").lower().endswith(".csv"):
         raise ValidationFailedError("Upload a .csv file", code="invalid_file_type")
@@ -162,13 +172,75 @@ async def rename_lead_list(
 
 
 @router.delete("/lists/{list_id}", response_model=MessageResponse, summary="Delete a sheet")
-async def delete_lead_list(list_id: uuid.UUID, db: DbSession, user: CurrentUser) -> MessageResponse:
-    """Removes the grouping only. The leads themselves are never deleted here --
-    losing contacts because a tab was tidied away would be indefensible."""
+async def delete_lead_list(
+    list_id: uuid.UUID,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_LEADS))],
+    delete_leads: bool = Query(
+        default=False,
+        description="Also delete the leads on this sheet. Off by default so an "
+        "API caller cannot destroy contacts by accident.",
+    ),
+) -> MessageResponse:
+    """Delete a sheet, and optionally everyone on it.
+
+    Two leads are spared even when `delete_leads` is set, because deleting them
+    would do damage the user did not ask for: one that also belongs to another
+    sheet (that tab would silently shrink), and one with a call in flight
+    (the live conversation would lose its lead mid-sentence).
+    """
     lead_list = await _get_list(db, user, list_id)
+    if not delete_leads:
+        await db.delete(lead_list)
+        await db.commit()
+        return MessageResponse(message="Sheet removed. The leads on it were kept.")
+
+    members = list(
+        (
+            await db.execute(
+                select(LeadListMember.lead_id).where(LeadListMember.lead_list_id == lead_list.id)
+            )
+        ).scalars()
+    )
+
+    shared: set[uuid.UUID] = set()
+    in_flight: set[uuid.UUID] = set()
+    if members:
+        shared = set(
+            (
+                await db.execute(
+                    select(LeadListMember.lead_id).where(
+                        LeadListMember.lead_id.in_(members),
+                        LeadListMember.lead_list_id != lead_list.id,
+                    )
+                )
+            ).scalars()
+        )
+        in_flight = set(
+            (
+                await db.execute(
+                    select(Call.lead_id).where(
+                        Call.lead_id.in_(members), Call.status.in_(ACTIVE_CALL_STATUSES)
+                    )
+                )
+            ).scalars()
+        )
+
+    doomed = [lead_id for lead_id in members if lead_id not in shared and lead_id not in in_flight]
+    for lead_id in doomed:
+        lead = await db.get(Lead, lead_id)
+        if lead is not None:
+            await db.delete(lead)
+
     await db.delete(lead_list)
     await db.commit()
-    return MessageResponse(message="Sheet removed. The leads on it were kept.")
+
+    parts = [f"Deleted the sheet and {len(doomed)} lead(s)"]
+    if shared:
+        parts.append(f"{len(shared)} kept because they are on another sheet")
+    if in_flight:
+        parts.append(f"{len(in_flight)} kept because a call is in progress")
+    return MessageResponse(message=". ".join(parts) + ".")
 
 
 async def _get_list(db, user, list_id: uuid.UUID) -> LeadList:
@@ -185,7 +257,10 @@ async def get_lead(lead_id: uuid.UUID, db: DbSession, user: CurrentUser) -> Lead
 
 @router.patch("/{lead_id}", response_model=LeadRead, summary="Update a lead")
 async def update_lead(
-    lead_id: uuid.UUID, payload: LeadUpdate, db: DbSession, user: CurrentUser
+    lead_id: uuid.UUID,
+    payload: LeadUpdate,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_LEADS))],
 ) -> LeadRead:
     lead = await _get(db, user, lead_id)
     for field, value in payload.model_dump(exclude_unset=True).items():
@@ -196,7 +271,11 @@ async def update_lead(
 
 
 @router.delete("/{lead_id}", response_model=MessageResponse, summary="Delete a lead")
-async def delete_lead(lead_id: uuid.UUID, db: DbSession, user: CurrentUser) -> MessageResponse:
+async def delete_lead(
+    lead_id: uuid.UUID,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_LEADS))],
+) -> MessageResponse:
     await db.delete(await _get(db, user, lead_id))
     await db.commit()
     return MessageResponse(message="Lead deleted")

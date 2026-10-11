@@ -5,32 +5,56 @@ autogenerate and for the test-suite schema creation.
 """
 
 from app.db.base import Base
+from app.models.activity import ActivityEvent, ActorType, EntityType
 from app.models.agent import Agent, AgentLanguage
+from app.models.billing import CreditEntry, CreditEntryKind, PlanTier, PlatformEvent
 from app.models.call import (
     TERMINAL_STATUSES,
     Call,
     CallDirection,
+    CallMode,
+    CallSource,
     CallStatus,
     CallTurn,
     CallUsage,
     UsageComponent,
 )
 from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus, CampaignStatus
+from app.models.integration import (
+    ApiKey,
+    WebhookDelivery,
+    WebhookDeliveryStatus,
+    WebhookEndpoint,
+    WebhookEvent,
+)
 from app.models.knowledge import Document, DocumentChunk, DocumentStatus, KnowledgeBase
 from app.models.lead import InterestLevel, Lead, LeadStatus
 from app.models.lead_list import LeadList, LeadListMember, LeadListSource
+from app.models.learning import AgentVariant, VariantKind, VariantStatus, VariantTrial
 from app.models.organization import Organization
+from app.models.package import CreditPackage, Order, OrderStatus, PackageKind, PaymentEvent
 from app.models.pricing import PricingRate
 from app.models.refresh_token import RefreshToken
+from app.models.reservation import CreditReservation, ReservationStatus
 from app.models.user import User, UserRole
 
 __all__ = [
     "TERMINAL_STATUSES",
+    "ActivityEvent",
+    "ActorType",
     "Agent",
+    "AgentVariant",
+    "ApiKey",
     "AgentLanguage",
     "Base",
     "Call",
+    "CreditEntry",
+    "CreditPackage",
+    "CreditReservation",
+    "CreditEntryKind",
     "CallDirection",
+    "CallMode",
+    "CallSource",
     "CallStatus",
     "CallTurn",
     "CallUsage",
@@ -39,6 +63,7 @@ __all__ = [
     "CampaignLeadStatus",
     "CampaignStatus",
     "Document",
+    "EntityType",
     "DocumentChunk",
     "DocumentStatus",
     "InterestLevel",
@@ -48,10 +73,24 @@ __all__ = [
     "LeadListMember",
     "LeadListSource",
     "LeadStatus",
+    "Order",
+    "OrderStatus",
     "Organization",
+    "PackageKind",
+    "PaymentEvent",
+    "PlanTier",
+    "PlatformEvent",
     "PricingRate",
     "RefreshToken",
+    "ReservationStatus",
     "UsageComponent",
     "User",
     "UserRole",
+    "VariantKind",
+    "VariantStatus",
+    "VariantTrial",
+    "WebhookDelivery",
+    "WebhookDeliveryStatus",
+    "WebhookEndpoint",
+    "WebhookEvent",
 ]

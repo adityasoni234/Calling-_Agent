@@ -82,6 +82,34 @@ def _payload(code: str, message: str, details: Any = None) -> dict[str, Any]:
     return {"error": body}
 
 
+#: Pydantic's wording, turned into something a non-technical user can act on.
+_FRIENDLY = {
+    "too_long": "is longer than allowed",
+    "too_short": "is too short",
+    "missing": "is required",
+}
+
+
+def _validation_message(details: list[dict[str, Any]]) -> str:
+    """Say which field and why.
+
+    "Input validation failed" is true and useless: the details array that
+    explains it never reaches the screen, so the user is left guessing which
+    of their inputs the server objected to.
+    """
+    if not details:
+        return "Input validation failed"
+    first = details[0]
+    field = str(first.get("field", "")).replace("_", " ").strip()
+    kind = str(first.get("type", ""))
+    reason = next((text for key, text in _FRIENDLY.items() if key in kind), None)
+    if reason and field:
+        return f"The {field} {reason}. {first.get('message', '')}".strip()
+    if field:
+        return f"{field.capitalize()}: {first.get('message', 'is not valid')}"
+    return str(first.get("message", "Input validation failed"))
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(_request: Request, exc: AppError) -> JSONResponse:
@@ -103,7 +131,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         ]
         return JSONResponse(
             status_code=HTTP_422_UNPROCESSABLE,
-            content=_payload("validation_failed", "Input validation failed", details),
+            content=_payload("validation_failed", _validation_message(details), details),
         )
 
     @app.exception_handler(StarletteHTTPException)

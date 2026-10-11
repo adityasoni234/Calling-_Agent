@@ -115,6 +115,20 @@ class PlivoTelephonyProvider(TelephonyProvider):
             str(payload.get("To", "")),
         )
 
+    def bridge_document(
+        self, *, to_number: str, caller_id: str, record: bool = False
+    ) -> tuple[str, str]:
+        recording = '<Record startOnDialAnswer="true" redirect="false" />' if record else ""
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response>"
+            f"{recording}"
+            f'<Dial callerId="{escape(caller_id)}">'
+            f"<Number>{escape(to_number)}</Number>"
+            "</Dial></Response>"
+        )
+        return xml, "application/xml"
+
     def parse_webhook(self, payload: dict[str, Any]) -> TelephonyEvent:
         status = str(payload.get("CallStatus") or payload.get("Status") or "").lower()
         hangup_cause = payload.get("HangupCause") or payload.get("HangupCauseName")

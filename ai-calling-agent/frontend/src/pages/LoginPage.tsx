@@ -100,27 +100,24 @@ export function AuthShell({
   children: React.ReactNode
 }) {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-ink-deep px-4 py-10">
-      {/* Two soft brand washes give the dark ground depth without a busy image. */}
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-ink-50 px-4 py-10">
+      {/* One soft wash, barely there. On a paper ground the page should look
+          printed, not lit from behind. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -left-40 -top-40 h-[32rem] w-[32rem] rounded-full bg-brand-600/20 blur-[120px]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -bottom-40 -right-32 h-[28rem] w-[28rem] rounded-full bg-brand-400/15 blur-[120px]"
+        className="pointer-events-none absolute -left-48 -top-48 h-[34rem] w-[34rem] rounded-full bg-brand-200/25 blur-[140px]"
       />
 
       <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-8 text-center">
-          <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-sheen text-sm font-bold text-white shadow-glow">
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-700 text-sm font-bold text-white">
             AC
           </span>
-          <h1 className="mt-5 text-xl font-semibold text-white">{title}</h1>
-          <p className="mt-1.5 text-sm text-ink-400">{subtitle}</p>
+          <h1 className="mt-5 text-[1.6rem] leading-tight text-ink-900">{title}</h1>
+          <p className="mt-2 text-sm text-ink-500">{subtitle}</p>
         </div>
-        <div className="rounded-2xl bg-white p-6 shadow-lift ring-1 ring-white/10">{children}</div>
-        <p className="mt-6 text-center text-2xs text-ink-500">
+        <div className="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-200/70">{children}</div>
+        <p className="mt-6 text-center text-2xs text-ink-400">
           Calls are recorded where enabled. Comply with local calling regulations.
         </p>
       </div>

@@ -1,20 +1,26 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy import func, select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, requires
 from app.api.pagination import PageParam, PageSizeParam, paginate
 from app.core.config import settings
 from app.core.errors import NotFoundError, ValidationFailedError
+from app.core.permissions import Capability
+from app.models.activity import EntityType
 from app.models.agent import Agent
 from app.models.call import Call
 from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus, CampaignStatus
 from app.models.lead import Lead, LeadStatus
+from app.models.lead_list import LeadList, LeadListMember
+from app.models.user import User
 from app.schemas.campaign import (
     AddLeadsRequest,
+    AddSheetRequest,
     CampaignCreate,
     CampaignDetail,
     CampaignImportResult,
@@ -25,6 +31,7 @@ from app.schemas.campaign import (
     DispatchResult,
 )
 from app.schemas.common import MessageResponse, Page
+from app.services.activity_service import safe_record
 from app.services.campaign_service import ACTIVE_CALL_STATUSES, CampaignService
 from app.services.lead_service import LeadService
 from app.tasks.queue import enqueue_campaign_dispatch
@@ -96,7 +103,9 @@ async def list_campaigns(
     summary="Create a campaign",
 )
 async def create_campaign(
-    payload: CampaignCreate, db: DbSession, user: CurrentUser
+    payload: CampaignCreate,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.RUN_CAMPAIGNS))],
 ) -> CampaignDetail:
     agent = await db.get(Agent, payload.agent_id)
     if agent is None or agent.organization_id != user.organization_id:
@@ -168,25 +177,88 @@ async def _transition(
 ) -> CampaignRead:
     service = CampaignService(db)
     campaign = await service.get(campaign_id, user.organization_id)
+    was = str(campaign.status)
     campaign = await service.set_status(campaign, target)
     if target is CampaignStatus.RUNNING:
         await enqueue_campaign_dispatch(campaign.id)
+
+    await safe_record(
+        db,
+        organization_id=user.organization_id,
+        actor=user,
+        action=f"campaign.{target.value}",
+        entity_type=EntityType.CAMPAIGN,
+        entity_id=campaign.id,
+        entity_label=campaign.name,
+        summary=f"{user.email} set {campaign.name} to {target.value}",
+        before={"status": was},
+        after={"status": str(campaign.status)},
+    )
     return CampaignRead.model_validate(campaign)
 
 
 @router.post("/{campaign_id}/start", response_model=CampaignRead, summary="Start a campaign")
-async def start_campaign(campaign_id: uuid.UUID, db: DbSession, user: CurrentUser) -> CampaignRead:
+async def start_campaign(
+    campaign_id: uuid.UUID,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.RUN_CAMPAIGNS))],
+) -> CampaignRead:
     return await _transition(campaign_id, db, user, CampaignStatus.RUNNING)
 
 
 @router.post("/{campaign_id}/pause", response_model=CampaignRead, summary="Pause a campaign")
-async def pause_campaign(campaign_id: uuid.UUID, db: DbSession, user: CurrentUser) -> CampaignRead:
+async def pause_campaign(
+    campaign_id: uuid.UUID,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.RUN_CAMPAIGNS))],
+) -> CampaignRead:
     return await _transition(campaign_id, db, user, CampaignStatus.PAUSED)
 
 
 @router.post("/{campaign_id}/stop", response_model=CampaignRead, summary="Stop a campaign")
-async def stop_campaign(campaign_id: uuid.UUID, db: DbSession, user: CurrentUser) -> CampaignRead:
+async def stop_campaign(
+    campaign_id: uuid.UUID,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.RUN_CAMPAIGNS))],
+) -> CampaignRead:
     return await _transition(campaign_id, db, user, CampaignStatus.STOPPED)
+
+
+@router.post(
+    "/{campaign_id}/leads/from-sheet",
+    response_model=MessageResponse,
+    summary="Add every lead on an uploaded sheet",
+)
+async def add_sheet_to_campaign(
+    campaign_id: uuid.UUID, payload: AddSheetRequest, db: DbSession, user: CurrentUser
+) -> MessageResponse:
+    """Dial a whole sheet without hand-picking its leads one by one.
+
+    Someone who asked not to be called is never added, whatever the sheet says.
+    """
+    service = CampaignService(db)
+    campaign = await service.get(campaign_id, user.organization_id)
+
+    lead_list = await db.get(LeadList, payload.lead_list_id)
+    if lead_list is None or lead_list.organization_id != user.organization_id:
+        raise NotFoundError("Lead list not found")
+
+    rows = await db.execute(
+        select(Lead.id)
+        .join(LeadListMember, LeadListMember.lead_id == Lead.id)
+        .where(
+            LeadListMember.lead_list_id == lead_list.id,
+            Lead.organization_id == user.organization_id,
+            Lead.status != LeadStatus.DO_NOT_CALL,
+        )
+    )
+    lead_ids = list(rows.scalars())
+    added = await service.add_leads(campaign, lead_ids) if lead_ids else 0
+
+    message = f'Added {added} lead(s) from "{lead_list.name}"'
+    if added < len(lead_ids):
+        message += f", {len(lead_ids) - added} were already on this campaign"
+    return MessageResponse(message=message + ".")
 
 
 @router.post(
@@ -254,7 +326,7 @@ async def import_campaign_leads(
 async def dispatch_now(
     campaign_id: uuid.UUID,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(requires(Capability.RUN_CAMPAIGNS))],
     force: bool = Query(
         default=False,
         description="Dial immediately, ignoring the calling window and retry backoff. "
@@ -276,7 +348,9 @@ async def dispatch_now(
 
 @router.delete("/{campaign_id}", response_model=MessageResponse, summary="Delete a campaign")
 async def delete_campaign(
-    campaign_id: uuid.UUID, db: DbSession, user: CurrentUser
+    campaign_id: uuid.UUID,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.RUN_CAMPAIGNS))],
 ) -> MessageResponse:
     campaign = await CampaignService(db).get(campaign_id, user.organization_id)
     await db.delete(campaign)

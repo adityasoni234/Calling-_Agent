@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 
 from app.agents.prompt import build_greeting, build_system_prompt
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, requires
 from app.api.pagination import PageParam, PageSizeParam, paginate
 from app.core.errors import ConflictError, NotFoundError
+from app.core.permissions import Capability
+from app.models.activity import EntityType
 from app.models.agent import Agent
 from app.models.call import Call
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.organization import Organization
+from app.models.user import User
 from app.schemas.agent import (
     AgentCreate,
     AgentGenerateRequest,
@@ -23,6 +27,7 @@ from app.schemas.agent import (
     PromptPreview,
 )
 from app.schemas.common import MessageResponse, Page
+from app.services.activity_service import safe_record
 from app.services.agent_builder import generate_blueprint
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -58,12 +63,26 @@ async def list_agents(
 @router.post(
     "", response_model=AgentRead, status_code=status.HTTP_201_CREATED, summary="Create an agent"
 )
-async def create_agent(payload: AgentCreate, db: DbSession, user: CurrentUser) -> AgentRead:
+async def create_agent(
+    payload: AgentCreate,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_AGENTS))],
+) -> AgentRead:
     data = payload.model_dump(mode="json")
     agent = Agent(organization_id=user.organization_id, **data)
     db.add(agent)
     await db.commit()
     await db.refresh(agent)
+    await safe_record(
+        db,
+        organization_id=user.organization_id,
+        actor=user,
+        action="agent.created",
+        entity_type=EntityType.AGENT,
+        entity_id=agent.id,
+        entity_label=agent.name,
+        summary=f"{user.email} created agent {agent.name}",
+    )
     return AgentRead.model_validate(agent)
 
 
@@ -73,7 +92,9 @@ async def create_agent(payload: AgentCreate, db: DbSession, user: CurrentUser) -
     summary="Draft an agent from a plain-language brief",
 )
 async def generate_agent(
-    payload: AgentGenerateRequest, db: DbSession, user: CurrentUser
+    payload: AgentGenerateRequest,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_AGENTS))],
 ) -> AgentGenerateResponse:
     """Write the configuration for you, then hand it back to edit.
 
@@ -111,7 +132,10 @@ async def get_agent(agent_id: uuid.UUID, db: DbSession, user: CurrentUser) -> Ag
 
 @router.patch("/{agent_id}", response_model=AgentRead, summary="Update an agent")
 async def update_agent(
-    agent_id: uuid.UUID, payload: AgentUpdate, db: DbSession, user: CurrentUser
+    agent_id: uuid.UUID,
+    payload: AgentUpdate,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_AGENTS))],
 ) -> AgentRead:
     agent = await _get(db, user, agent_id)
     for field, value in payload.model_dump(exclude_unset=True, mode="json").items():
@@ -122,7 +146,11 @@ async def update_agent(
 
 
 @router.delete("/{agent_id}", response_model=MessageResponse, summary="Delete an agent")
-async def delete_agent(agent_id: uuid.UUID, db: DbSession, user: CurrentUser) -> MessageResponse:
+async def delete_agent(
+    agent_id: uuid.UUID,
+    db: DbSession,
+    user: Annotated[User, Depends(requires(Capability.MANAGE_AGENTS))],
+) -> MessageResponse:
     agent = await _get(db, user, agent_id)
 
     # Deleting an agent mid-campaign would orphan running calls.
@@ -141,8 +169,20 @@ async def delete_agent(agent_id: uuid.UUID, db: DbSession, user: CurrentUser) ->
         await db.commit()
         return MessageResponse(message="Agent has call history, so it was deactivated instead")
 
+    name = (await _get(db, user, agent_id)).name
+
     await db.delete(agent)
     await db.commit()
+    await safe_record(
+        db,
+        organization_id=user.organization_id,
+        actor=user,
+        action="agent.deleted",
+        entity_type=EntityType.AGENT,
+        entity_id=agent_id,
+        entity_label=name,
+        summary=f"{user.email} deleted agent {name}",
+    )
     return MessageResponse(message="Agent deleted")
 
 

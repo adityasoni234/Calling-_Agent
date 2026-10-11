@@ -32,6 +32,23 @@ from app.models.knowledge import Document, DocumentChunk, DocumentStatus, Knowle
 from app.models.lead import InterestLevel, Lead, LeadStatus
 from app.models.lead_list import LeadList, LeadListMember, LeadListSource
 from app.models.learning import AgentVariant, VariantKind, VariantStatus, VariantTrial
+from app.models.messaging import (
+    BILLABLE_MESSAGE_STATUSES,
+    TERMINAL_MESSAGE_STATUSES,
+    Channel,
+    ConsentMethod,
+    ConsentRecord,
+    Conversation,
+    Message,
+    MessageCampaign,
+    MessageCampaignStatus,
+    MessageDirection,
+    MessageStatus,
+    MessageTemplate,
+    Suppression,
+    SuppressionReason,
+    TemplateStatus,
+)
 from app.models.organization import Organization
 from app.models.package import CreditPackage, Order, OrderStatus, PackageKind, PaymentEvent
 from app.models.price_book import (
@@ -57,6 +74,21 @@ from app.models.reservation import CreditReservation, ReservationStatus
 from app.models.user import User, UserRole
 
 __all__ = [
+    "TemplateStatus",
+    "SuppressionReason",
+    "Suppression",
+    "MessageTemplate",
+    "MessageStatus",
+    "MessageDirection",
+    "MessageCampaignStatus",
+    "MessageCampaign",
+    "Message",
+    "Conversation",
+    "ConsentRecord",
+    "ConsentMethod",
+    "Channel",
+    "TERMINAL_MESSAGE_STATUSES",
+    "BILLABLE_MESSAGE_STATUSES",
     "Rounding",
     "RateKind",
     "ProviderUsageRecord",

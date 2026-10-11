@@ -28,12 +28,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.money import MoneyAmount, MoneyRate
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from app.db.types import StrEnumType
+from app.db.types import JSONColumn, StrEnumType
 
 
 class Billable(enum.StrEnum):
@@ -106,15 +105,9 @@ class PriceBook(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     #: The book new sign-ups get. Exactly one should carry it.
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    effective_from: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    effective_to: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    published_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    effective_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    effective_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     published_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -157,7 +150,7 @@ class PriceRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     increment_seconds: Mapped[int] = mapped_column(Integer, default=60)
     #: [{"up_to": 1000, "rate": "0.13"}, ...] for TIERED.
-    tiers: Mapped[list] = mapped_column(JSONB, default=list)
+    tiers: Mapped[list] = mapped_column(JSONColumn(), default=list)
 
     #: What we believe this costs us, recorded when the rule was written. Lets
     #: the publish guard compare price against cost without a live lookup, and
@@ -175,9 +168,7 @@ class PriceOverride(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "price_overrides"
     __table_args__ = (
-        UniqueConstraint(
-            "organization_id", "billable", "region", name="uq_price_override_scope"
-        ),
+        UniqueConstraint("organization_id", "billable", "region", name="uq_price_override_scope"),
     )
 
     organization_id: Mapped[uuid.UUID] = mapped_column(
@@ -193,7 +184,5 @@ class PriceOverride(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

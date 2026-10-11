@@ -20,6 +20,7 @@ from app.models.call import (
     UsageComponent,
 )
 from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus, CampaignStatus
+from app.models.fx import ExchangeRate
 from app.models.integration import (
     ApiKey,
     WebhookDelivery,
@@ -33,12 +34,43 @@ from app.models.lead_list import LeadList, LeadListMember, LeadListSource
 from app.models.learning import AgentVariant, VariantKind, VariantStatus, VariantTrial
 from app.models.organization import Organization
 from app.models.package import CreditPackage, Order, OrderStatus, PackageKind, PaymentEvent
+from app.models.price_book import (
+    Billable,
+    PriceBook,
+    PriceBookStatus,
+    PriceOverride,
+    PriceRule,
+    RateKind,
+    Rounding,
+)
 from app.models.pricing import PricingRate
+from app.models.provider import (
+    ProviderBalance,
+    ProviderConnection,
+    ProviderKind,
+    ProviderStatus,
+    ProviderSyncRun,
+    ProviderUsageRecord,
+)
 from app.models.refresh_token import RefreshToken
 from app.models.reservation import CreditReservation, ReservationStatus
 from app.models.user import User, UserRole
 
 __all__ = [
+    "Rounding",
+    "RateKind",
+    "ProviderUsageRecord",
+    "ProviderSyncRun",
+    "ProviderStatus",
+    "ProviderKind",
+    "ProviderConnection",
+    "ProviderBalance",
+    "PriceRule",
+    "PriceOverride",
+    "PriceBookStatus",
+    "PriceBook",
+    "ExchangeRate",
+    "Billable",
     "TERMINAL_STATUSES",
     "ActivityEvent",
     "ActorType",

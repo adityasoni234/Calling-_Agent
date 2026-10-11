@@ -8,6 +8,7 @@ from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
+from app.core.times import as_utc
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
@@ -41,6 +42,5 @@ class RefreshToken(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     @property
     def is_active(self) -> bool:
         expires_at = self.expires_at
-        if expires_at.tzinfo is None:  # SQLite round-trips naive datetimes
-            expires_at = expires_at.replace(tzinfo=UTC)
+        expires_at = as_utc(expires_at)
         return self.revoked_at is None and expires_at > datetime.now(UTC)

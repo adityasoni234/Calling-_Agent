@@ -26,12 +26,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.money import MoneyAmount, MoneyRate
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from app.db.types import StrEnumType
+from app.db.types import JSONColumn, StrEnumType
 
 
 class ProviderKind(enum.StrEnum):
@@ -85,22 +84,18 @@ class ProviderConnection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     #: {"account_sid": "<fernet>", ...}. Encrypted individually so one key can
     #: be rotated without re-entering the rest.
-    secrets: Mapped[dict] = mapped_column(JSONB, default=dict)
+    secrets: Mapped[dict] = mapped_column(JSONColumn(), default=dict)
     #: Masked tails for display: {"account_sid": "••••1234"}. Safe to serve.
-    secret_hints: Mapped[dict] = mapped_column(JSONB, default=dict)
+    secret_hints: Mapped[dict] = mapped_column(JSONColumn(), default=dict)
     #: Non-secret settings: region, caller id, webhook url, subaccount.
-    config: Mapped[dict] = mapped_column(JSONB, default=dict)
+    config: Mapped[dict] = mapped_column(JSONColumn(), default=dict)
 
     status: Mapped[ProviderStatus] = mapped_column(
         StrEnumType(ProviderStatus, 16), default=ProviderStatus.UNCONFIGURED
     )
     status_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
-    last_checked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    last_synced_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     #: Who last touched the credentials, for the audit trail.
     secrets_rotated_at: Mapped[datetime | None] = mapped_column(
@@ -135,7 +130,7 @@ class ProviderBalance(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     #: Spend inside the provider's own billing period, when it reports one.
     period_spend = mapped_column(MoneyAmount, nullable=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    raw: Mapped[dict] = mapped_column(JSONB, default=dict)
+    raw: Mapped[dict] = mapped_column(JSONColumn(), default=dict)
 
 
 class ProviderUsageRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -181,7 +176,7 @@ class ProviderUsageRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    raw: Mapped[dict] = mapped_column(JSONB, default=dict)
+    raw: Mapped[dict] = mapped_column(JSONColumn(), default=dict)
 
 
 class ProviderSyncRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -195,8 +190,6 @@ class ProviderSyncRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     kind: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(16), default="running")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    finished_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     records: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

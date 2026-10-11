@@ -20,6 +20,19 @@ from app.models.call import (
     UsageComponent,
 )
 from app.models.campaign import Campaign, CampaignLead, CampaignLeadStatus, CampaignStatus
+from app.models.email import (
+    NEVER_SEND,
+    TERMINAL_EMAIL_STATUSES,
+    EmailAddress,
+    EmailCampaign,
+    EmailCampaignStatus,
+    EmailMessage,
+    EmailStatus,
+    EmailSuppression,
+    EmailSuppressionReason,
+    EmailVerdict,
+    ValidationMethod,
+)
 from app.models.fx import ExchangeRate
 from app.models.integration import (
     ApiKey,
@@ -74,6 +87,17 @@ from app.models.reservation import CreditReservation, ReservationStatus
 from app.models.user import User, UserRole
 
 __all__ = [
+    "ValidationMethod",
+    "EmailVerdict",
+    "EmailSuppressionReason",
+    "EmailSuppression",
+    "EmailStatus",
+    "EmailMessage",
+    "EmailCampaignStatus",
+    "EmailCampaign",
+    "EmailAddress",
+    "TERMINAL_EMAIL_STATUSES",
+    "NEVER_SEND",
     "TemplateStatus",
     "SuppressionReason",
     "Suppression",

@@ -24,6 +24,7 @@ from app.models.messaging import Message
 from app.models.organization import Organization
 from app.models.package import CreditPackage, Order, OrderStatus
 from app.models.price_book import PriceBook, PriceBookStatus, PriceRule
+from app.models.provider import ProviderBalance, ProviderSyncRun, ProviderUsageRecord
 from app.models.user import User
 from app.schemas.common import MessageResponse
 from app.schemas.platform import (
@@ -52,6 +53,7 @@ from app.services.billing_service import BillingService, spend_total
 from app.services.order_service import OrderService
 from app.services.pricing_engine import BelowCost, PricingEngine
 from app.services.provider_service import PROVIDER_SPECS, ProviderService
+from app.services.provider_sync import ProviderSyncService
 
 router = APIRouter(prefix="/platform", tags=["platform"])
 
@@ -1200,4 +1202,117 @@ async def platform_messages(
         # Of what we actually attempted: counting suppressed messages as
         # failures would make a healthy opt-out list look like a broken sender.
         "delivery_rate": round(delivered / attempted * 100, 1) if attempted else None,
+    }
+
+
+# --- provider sync and reconciliation ---------------------------------
+
+
+@router.post(
+    "/providers/{connection_id}/sync",
+    summary="Pull balance and usage from the provider",
+)
+async def sync_provider(
+    connection_id: uuid.UUID, db: DbSession, admin: PlatformAdmin, days: int = 30
+) -> dict:
+    """Fetch what the provider says, then compare it to our own records."""
+    service = ProviderSyncService(db)
+    connection = await ProviderService(db).get(connection_id)
+
+    balance = await service.sync_balance(connection)
+    records = await service.sync_usage(connection, days=days)
+    reconciliation = await service.reconcile(connection, days=days)
+
+    await _record(db, admin, "provider.synced", target=connection.slug, detail=f"{records} records")
+    return {
+        "provider": connection.slug,
+        "balance": None
+        if balance is None
+        else {
+            "amount": str(balance.balance),
+            "currency": balance.currency,
+            "observed_at": balance.observed_at.isoformat(),
+        },
+        "usage_records": records,
+        "reconciliation": reconciliation.as_dict(),
+        "synced_at": datetime.now(UTC).isoformat(),
+    }
+
+
+@router.get(
+    "/providers/{connection_id}/usage",
+    summary="What the provider says we used",
+)
+async def provider_usage(
+    connection_id: uuid.UUID, db: DbSession, admin: PlatformAdmin, days: int = 30
+) -> dict:
+    """Stored usage rows, newest first, with the reconciliation alongside.
+
+    Parent categories are returned but flagged, so the page can show the
+    hierarchy without the reader mistaking the rollups for extra spend.
+    """
+    connection = await ProviderService(db).get(connection_id)
+    since = datetime.now(UTC) - timedelta(days=days)
+
+    rows = await db.execute(
+        select(ProviderUsageRecord)
+        .where(
+            ProviderUsageRecord.connection_id == connection_id,
+            ProviderUsageRecord.period_start >= since,
+        )
+        .order_by(ProviderUsageRecord.cost_usd.desc().nullslast())
+        .limit(200)
+    )
+    items = [
+        {
+            "category": r.category,
+            "description": r.description,
+            "is_parent": r.is_parent,
+            "quantity": str(r.quantity or 0),
+            "unit": r.unit,
+            "cost_usd": str(r.cost_usd or 0),
+            "currency": r.currency,
+            "period_start": r.period_start.isoformat(),
+        }
+        for r in rows.scalars()
+    ]
+
+    latest = await db.execute(
+        select(ProviderBalance)
+        .where(ProviderBalance.connection_id == connection_id)
+        .order_by(ProviderBalance.observed_at.desc())
+        .limit(1)
+    )
+    balance = latest.scalars().first()
+
+    runs = await db.execute(
+        select(ProviderSyncRun)
+        .where(ProviderSyncRun.connection_id == connection_id)
+        .order_by(ProviderSyncRun.started_at.desc())
+        .limit(5)
+    )
+
+    return {
+        "provider": connection.slug,
+        "items": items,
+        "balance": None
+        if balance is None
+        else {
+            "amount": str(balance.balance),
+            "currency": balance.currency,
+            "observed_at": balance.observed_at.isoformat(),
+        },
+        "reconciliation": (
+            await ProviderSyncService(db).reconcile(connection, days=days)
+        ).as_dict(),
+        "recent_runs": [
+            {
+                "kind": run.kind,
+                "status": run.status,
+                "records": run.records,
+                "error": run.error,
+                "started_at": run.started_at.isoformat(),
+            }
+            for run in runs.scalars()
+        ],
     }

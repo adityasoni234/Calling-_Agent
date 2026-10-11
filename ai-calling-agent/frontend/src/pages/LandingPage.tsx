@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 
+import { SERVICES } from "@/components/services";
+import { ServicesTicker } from "@/components/ServicesTicker";
 import { useAuthStore } from "@/stores/auth";
 
 /**
@@ -251,6 +253,8 @@ export function LandingPage() {
           </dl>
         </section>
 
+        <ServicesTicker />
+
         {/* Language */}
         <section className="border-y border-ink-200/60 bg-brand-700">
           <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
@@ -485,6 +489,38 @@ export function LandingPage() {
             </div>
           </div>
         </section>
+
+        {/* Everything included */}
+        <section className="border-t border-ink-200/60 bg-ink-100/60">
+          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
+            <h2 className="font-display text-3xl text-ink-900">
+              Everything included
+            </h2>
+            <p className="mt-3 max-w-2xl text-base leading-relaxed text-ink-600">
+              No per-channel add-ons and no per-seat fee. You pay for the calls
+              and messages you actually send.
+            </p>
+            <ul className="mt-10 grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+              {SERVICES.map((service) => (
+                <li key={service.name} className="flex gap-3">
+                  <span aria-hidden className="mt-1 text-brand-600">
+                    ✓
+                  </span>
+                  <span>
+                    <span className="block text-sm text-ink-900">
+                      {service.name}
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-ink-500">
+                      {service.note}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        <ServicesTicker />
 
         {/* CTA */}
         <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8">

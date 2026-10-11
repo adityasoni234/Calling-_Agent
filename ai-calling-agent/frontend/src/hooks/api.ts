@@ -7,6 +7,7 @@ import type {
   Channel,
   Conversation,
   Message as SmsMessage,
+  MessageCampaign,
   MessageTemplate,
   SendEstimate,
   Suppression,
@@ -909,5 +910,44 @@ export function useRemoveSuppression() {
   return useMutation({
     mutationFn: (id: string) => api.delete(`/messaging/suppressions/${id}`),
     onSuccess: () => client.invalidateQueries({ queryKey: ["suppressions"] }),
+  });
+}
+
+export function useMessageCampaigns() {
+  return useQuery({
+    queryKey: ["message-campaigns"],
+    queryFn: () => api.get<MessageCampaign[]>("/messaging/campaigns"),
+    // A running campaign moves; a list that needs refreshing is one people
+    // stop believing.
+    refetchInterval: 10_000,
+  });
+}
+
+export function useCreateMessageCampaign() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      name: string;
+      channel: Channel;
+      body?: string;
+      template_id?: string;
+      lead_list_id?: string;
+      messages_per_minute?: number;
+      scheduled_at?: string;
+    }) => api.post<MessageCampaign>("/messaging/campaigns", body),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["message-campaigns"] }),
+  });
+}
+
+export function useControlMessageCampaign() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: string }) =>
+      api.post<MessageCampaign>(`/messaging/campaigns/${id}/${action}`, {}),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["message-campaigns"] });
+      client.invalidateQueries({ queryKey: ["messages"] });
+    },
   });
 }

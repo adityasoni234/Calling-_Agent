@@ -62,9 +62,23 @@ def _plain(number: str) -> str:
 class TwilioMessaging(MessagingProvider):
     name = "twilio"
 
+    def __init__(self, credentials: dict[str, str] | None = None) -> None:
+        #: Injected by `get_messaging_provider`, which resolves the admin-managed
+        #: connection before falling back to the environment.
+        self._credentials = credentials
+
+    def _resolved(self) -> dict[str, str]:
+        if self._credentials is not None:
+            return self._credentials
+        return {
+            "account_sid": settings.twilio_account_sid,
+            "auth_token": settings.twilio_auth_token,
+        }
+
     @property
     def configured(self) -> bool:
-        return bool(settings.twilio_account_sid and settings.twilio_auth_token)
+        creds = self._resolved()
+        return bool(creds.get("account_sid") and creds.get("auth_token"))
 
     def _auth(self) -> tuple[str, str]:
         if not self.configured:
@@ -72,7 +86,8 @@ class TwilioMessaging(MessagingProvider):
                 "Twilio messaging has no credentials. Set them in provider "
                 "settings; nothing will be sent until they are present."
             )
-        return settings.twilio_account_sid, settings.twilio_auth_token
+        creds = self._resolved()
+        return creds["account_sid"], creds["auth_token"]
 
     async def send(
         self,
@@ -200,6 +215,24 @@ class UnconfiguredMessaging(MessagingProvider):
 
     def parse_webhook(self, form: dict) -> InboundMessage | None:
         return None
+
+
+async def get_messaging_provider_async() -> MessagingProvider:
+    """Resolve credentials from the admin-managed connection first.
+
+    The sync version below stays for callers that cannot await; it reads only
+    the environment, so anything using it will not see a rotation made in the
+    admin until it is converted.
+    """
+    if settings.messaging_provider == "mock":
+        from app.services.messaging.mock import MockMessaging
+
+        return MockMessaging()
+
+    from app.services.credentials import resolve
+
+    twilio = TwilioMessaging(await resolve("twilio"))
+    return twilio if twilio.configured else UnconfiguredMessaging()
 
 
 def get_messaging_provider() -> MessagingProvider:

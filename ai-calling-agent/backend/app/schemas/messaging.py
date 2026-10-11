@@ -161,3 +161,45 @@ class ConsentRead(BaseModel):
     granted_at: datetime
     revoked_at: datetime | None
     evidence: dict
+
+
+class CampaignCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    channel: Channel = Channel.SMS
+    body: str | None = Field(default=None, max_length=4096)
+    template_id: uuid.UUID | None = None
+    lead_list_id: uuid.UUID | None = None
+    from_number: str | None = None
+    #: Carriers rate-limit, and a sender that bursts gets flagged.
+    messages_per_minute: int = Field(default=60, ge=1, le=600)
+    scheduled_at: datetime | None = None
+
+
+class CampaignRead(_Money):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    channel: str
+    status: str
+    body: str | None
+    template_id: uuid.UUID | None
+    lead_list_id: uuid.UUID | None
+    from_number: str | None
+    messages_per_minute: int
+    scheduled_at: datetime | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    total_recipients: int
+    sent_count: int
+    delivered_count: int
+    failed_count: int
+    suppressed_count: int
+    estimated_charge_usd: Decimal | None
+    actual_charge_usd: Decimal | None
+    created_at: datetime
+    #: Server-computed so the UI never re-derives it and disagrees.
+    percent_complete: int = 0
+    remaining: int = 0

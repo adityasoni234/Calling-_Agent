@@ -204,6 +204,9 @@ class ProviderService:
 
         await self.db.commit()
         await self.db.refresh(connection)
+        from app.services.credentials import invalidate
+
+        invalidate(slug)
         log.info("provider.saved", slug=slug, rotated=rotated, enabled=is_enabled)
         return connection
 

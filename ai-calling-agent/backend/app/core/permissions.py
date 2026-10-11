@@ -58,6 +58,29 @@ _OPERATOR = _VIEWER | {
     Capability.VIEW_CONVERSATIONS,
 }
 
+#: Money, without the product. Deliberately cannot place a call, send a
+#: message or read a conversation: a billing dispute is settled from the
+#: ledger, not by listening to the customer's calls.
+_FINANCE = _VIEWER | {
+    Capability.MANAGE_BILLING,
+    Capability.BUY_CREDITS,
+}
+
+#: The mirror image of finance: the widest read access on customer content,
+#: and no authority over money at all.
+_SUPPORT = _VIEWER | {
+    Capability.VIEW_CONVERSATIONS,
+    Capability.MANAGE_LEADS,
+    Capability.SEND_MESSAGES,
+}
+
+#: Keeps the pipes running. Providers and settings, nothing commercial.
+_OPERATIONS = _VIEWER | {
+    Capability.MANAGE_INTEGRATIONS,
+    Capability.MANAGE_SETTINGS,
+    Capability.PLACE_CALLS,
+}
+
 _ADMIN = _OPERATOR | {
     Capability.MANAGE_AGENTS,
     Capability.MANAGE_TEMPLATES,
@@ -74,6 +97,9 @@ _OWNER = _ADMIN | {
 
 CAPABILITIES: dict[UserRole, frozenset[Capability]] = {
     UserRole.VIEWER: _VIEWER,
+    UserRole.FINANCE_ADMIN: frozenset(_FINANCE),
+    UserRole.SUPPORT_ADMIN: frozenset(_SUPPORT),
+    UserRole.OPERATIONS_ADMIN: frozenset(_OPERATIONS),
     UserRole.OPERATOR: frozenset(_OPERATOR),
     UserRole.ADMIN: frozenset(_ADMIN),
     UserRole.OWNER: frozenset(_OWNER),

@@ -216,3 +216,57 @@ async def test_checking_an_unknown_connection_is_a_404(client, auth_headers, db_
     await _as_admin(db_session)
     response = await client.post(f"/platform/providers/{uuid.uuid4()}/check", headers=auth_headers)
     assert response.status_code == 404
+
+
+# --- credentials actually govern runtime ------------------------------
+
+
+async def test_a_stored_credential_overrides_the_environment(
+    db_session, auth_headers, monkeypatch
+) -> None:
+    """The admin page has to win, or rotating a key changes nothing.
+
+    Before this, adapters read settings directly: an admin could rotate a
+    Twilio token and watch calls keep going out on the old one.
+    """
+    from app.core.config import settings
+    from app.services.credentials import invalidate, resolve
+
+    monkeypatch.setattr(settings, "twilio_account_sid", "AC_from_env")
+    monkeypatch.setattr(settings, "twilio_auth_token", "env_token")
+    invalidate()
+
+    assert (await resolve("twilio"))["account_sid"] == "AC_from_env"
+
+    await ProviderService(db_session).upsert(
+        slug="twilio", secrets={"account_sid": "AC_from_db", "auth_token": TOKEN}
+    )
+    resolved = await resolve("twilio")
+    assert resolved["account_sid"] == "AC_from_db"
+    assert resolved["auth_token"] == TOKEN
+
+
+async def test_the_environment_still_works_before_anyone_opens_the_admin(
+    db_session, auth_headers, monkeypatch
+) -> None:
+    """A fresh install must send without someone configuring it first."""
+    from app.core.config import settings
+    from app.services.credentials import invalidate, resolve
+
+    monkeypatch.setattr(settings, "deepgram_api_key", "dg_from_env")
+    invalidate()
+    assert (await resolve("deepgram"))["api_key"] == "dg_from_env"
+
+
+async def test_rotating_a_key_takes_effect_without_waiting_for_a_cache(
+    db_session, auth_headers
+) -> None:
+    from app.services.credentials import invalidate, resolve
+
+    service = ProviderService(db_session)
+    invalidate()
+    await service.upsert(slug="cartesia", secrets={"api_key": "first"})
+    assert (await resolve("cartesia"))["api_key"] == "first"
+
+    await service.upsert(slug="cartesia", secrets={"api_key": "second"})
+    assert (await resolve("cartesia"))["api_key"] == "second"

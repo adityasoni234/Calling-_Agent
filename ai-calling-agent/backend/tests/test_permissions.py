@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.core.permissions import Capability, can
+from app.core.permissions import CAPABILITIES, Capability, can
 from app.models.user import User, UserRole
 from tests.conftest import REGISTRATION
 
@@ -131,3 +131,43 @@ async def test_no_customer_role_can_reach_the_platform_api(
         await _as(db_session, role)
         response = await client.get("/platform/organizations", headers=auth_headers)
         assert response.status_code == 403, role
+
+
+# --- the separated admin roles ----------------------------------------
+
+
+def test_finance_cannot_read_customer_conversations() -> None:
+    """A billing dispute is settled from the ledger, not by reading calls."""
+    assert can(UserRole.FINANCE_ADMIN, Capability.MANAGE_BILLING)
+    assert not can(UserRole.FINANCE_ADMIN, Capability.VIEW_CONVERSATIONS)
+    assert not can(UserRole.FINANCE_ADMIN, Capability.PLACE_CALLS)
+
+
+def test_support_can_read_everything_and_spend_nothing() -> None:
+    """The mirror image of finance, on purpose."""
+    assert can(UserRole.SUPPORT_ADMIN, Capability.VIEW_CONVERSATIONS)
+    assert not can(UserRole.SUPPORT_ADMIN, Capability.MANAGE_BILLING)
+    assert not can(UserRole.SUPPORT_ADMIN, Capability.BUY_CREDITS)
+
+
+def test_operations_runs_the_pipes_and_touches_no_money() -> None:
+    assert can(UserRole.OPERATIONS_ADMIN, Capability.MANAGE_INTEGRATIONS)
+    assert can(UserRole.OPERATIONS_ADMIN, Capability.MANAGE_SETTINGS)
+    assert not can(UserRole.OPERATIONS_ADMIN, Capability.MANAGE_BILLING)
+    assert not can(UserRole.OPERATIONS_ADMIN, Capability.MANAGE_TEAM)
+
+
+def test_only_the_owner_manages_the_team_and_the_money() -> None:
+    for capability in (Capability.MANAGE_TEAM, Capability.MANAGE_BILLING):
+        holders = [r for r in UserRole if can(r, capability)]
+        assert UserRole.OWNER in holders
+        assert UserRole.OPERATOR not in holders
+        assert UserRole.VIEWER not in holders
+    assert not can(UserRole.ADMIN, Capability.MANAGE_TEAM)
+
+
+def test_every_role_has_an_explicit_capability_set() -> None:
+    """A role missing from the table silently has no permissions at all."""
+    for role in UserRole:
+        assert role in CAPABILITIES, f"{role} is not in the capability table"
+        assert CAPABILITIES[role], f"{role} has no capabilities"

@@ -10,6 +10,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState, Pager, Table } from "@/components/ui/Table";
 import {
   useAddSuppression,
+  useControlMessageCampaign,
+  useCreateMessageCampaign,
+  useMessageCampaigns,
   useConversations,
   useCreateTemplate,
   useDeleteTemplate,
@@ -39,6 +42,7 @@ import type { Channel } from "@/types/api";
 const TABS = [
   { key: "inbox", label: "Conversations" },
   { key: "send", label: "Send" },
+  { key: "campaigns", label: "Campaigns" },
   { key: "history", label: "Delivery reports" },
   { key: "templates", label: "Templates" },
   { key: "optouts", label: "Opt-outs" },
@@ -87,6 +91,7 @@ export function MessagesPage() {
 
       {tab === "inbox" && <Inbox />}
       {tab === "send" && <SendPanel channel={channel} onChannel={setChannel} />}
+      {tab === "campaigns" && <Campaigns />}
       {tab === "history" && <History />}
       {tab === "templates" && <Templates />}
       {tab === "optouts" && <OptOuts />}
@@ -699,5 +704,166 @@ function OptOuts() {
         )}
       </div>
     </Card>
+  );
+}
+
+// --- bulk campaigns ---------------------------------------------------
+
+const CAMPAIGN_ACTIONS: Record<string, string[]> = {
+  draft: ["launch"],
+  scheduled: ["send-now", "cancel"],
+  running: ["send-now", "pause", "cancel"],
+  paused: ["resume", "cancel"],
+  failed: ["resume", "cancel"],
+};
+
+function Campaigns() {
+  const campaigns = useMessageCampaigns();
+  const create = useCreateMessageCampaign();
+  const control = useControlMessageCampaign();
+  const [name, setName] = useState("");
+  const [body, setBody] = useState("");
+  const [channel, setChannel] = useState<Channel>("sms");
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setError(null);
+    try {
+      await create.mutateAsync({ name, channel, body });
+      setName("");
+      setBody("");
+    } catch (err) {
+      setError((err as Error)?.message ?? "Could not create that campaign");
+    }
+  };
+
+  const rows = campaigns.data ?? [];
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
+      <Card
+        title="Campaigns"
+        description="Each recipient goes through the same opt-out and pricing checks as a single send."
+        flush
+      >
+        <div className="px-5">
+          {!rows.length ? (
+            <EmptyState
+              title="No campaigns yet"
+              hint="Create one on the right. You will see the cost before anything sends."
+            />
+          ) : (
+            <Table
+              headers={[
+                "Campaign",
+                "Status",
+                "Progress",
+                "Sent",
+                "Skipped",
+                "Cost",
+                "",
+              ]}
+            >
+              {rows.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <p className="text-ink-900">{c.name}</p>
+                    <p className="mt-0.5 text-2xs text-ink-500">
+                      {c.channel} · {c.total_recipients} recipients
+                    </p>
+                  </td>
+                  <td>
+                    <Badge value={c.status} />
+                  </td>
+                  <td className="w-32">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-200">
+                      <div
+                        className="h-full rounded-full bg-brand-700 transition-all"
+                        style={{ width: `${c.percent_complete}%` }}
+                      />
+                    </div>
+                    <span className="mt-1 block text-2xs tabular-nums text-ink-400">
+                      {c.percent_complete}%
+                    </span>
+                  </td>
+                  <td className="tabular-nums">
+                    {c.sent_count}
+                    {c.delivered_count > 0 && (
+                      <span className="ml-1 text-2xs text-brand-700">
+                        {c.delivered_count} delivered
+                      </span>
+                    )}
+                  </td>
+                  <td className="tabular-nums text-ink-500">
+                    {c.suppressed_count}
+                  </td>
+                  <td className="tabular-nums">
+                    {formatUsd(c.actual_charge_usd ?? c.estimated_charge_usd)}
+                    {!c.actual_charge_usd && (
+                      <span className="ml-1 text-2xs text-ink-400">est.</span>
+                    )}
+                  </td>
+                  <td className="text-right">
+                    <div className="flex justify-end gap-1">
+                      {(CAMPAIGN_ACTIONS[c.status] ?? []).map((action) => (
+                        <Button
+                          key={action}
+                          size="sm"
+                          variant={action === "cancel" ? "ghost" : "secondary"}
+                          disabled={control.isPending}
+                          onClick={() => control.mutate({ id: c.id, action })}
+                        >
+                          {action === "send-now" ? "Send batch" : action}
+                        </Button>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </div>
+      </Card>
+
+      <Card
+        title="New campaign"
+        description="Sends to every lead with a phone number. You will see the cost before launching."
+      >
+        <div className="space-y-4">
+          <Select
+            label="Channel"
+            value={channel}
+            onChange={(e) => setChannel(e.target.value as Channel)}
+          >
+            <option value="sms">SMS</option>
+            <option value="whatsapp">WhatsApp</option>
+          </Select>
+          <Field
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="October follow-up"
+          />
+          <TextArea
+            label="Message"
+            rows={5}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+          />
+          <Button
+            className="w-full"
+            disabled={!name || !body || create.isPending}
+            onClick={() => void submit()}
+          >
+            {create.isPending ? "Checking cost…" : "Create as draft"}
+          </Button>
+          {error && <Alert tone="error">{error}</Alert>}
+          <p className="text-2xs leading-relaxed text-ink-400">
+            Created as a draft with its cost attached. Nothing sends until you
+            press Launch.
+          </p>
+        </div>
+      </Card>
+    </div>
   );
 }

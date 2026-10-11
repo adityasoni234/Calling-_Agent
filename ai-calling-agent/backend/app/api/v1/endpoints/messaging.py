@@ -22,6 +22,8 @@ from app.models.messaging import (
     ConsentRecord,
     Conversation,
     Message,
+    MessageCampaign,
+    MessageCampaignStatus,
     MessageDirection,
     MessageStatus,
     MessageTemplate,
@@ -30,6 +32,8 @@ from app.models.messaging import (
 from app.models.user import User
 from app.schemas.common import MessageResponse, Page
 from app.schemas.messaging import (
+    CampaignCreate,
+    CampaignRead,
     ConsentRead,
     ConsentWrite,
     ConversationRead,
@@ -41,8 +45,9 @@ from app.schemas.messaging import (
     TemplateRead,
     TemplateWrite,
 )
+from app.services.message_campaign_service import MessageCampaignService
 from app.services.messaging.base import MessagingNotConfigured
-from app.services.messaging.twilio import get_messaging_provider
+from app.services.messaging.twilio import get_messaging_provider_async
 from app.services.messaging_service import MessagingService, normalise_number
 
 router = APIRouter(prefix="/messaging", tags=["messaging"])
@@ -109,7 +114,7 @@ async def send_message(payload: MessageSend, db: DbSession, user: SendUser) -> M
     """
     service = MessagingService(db)
     template = await _template(db, user, payload.template_id) if payload.template_id else None
-    provider = get_messaging_provider()
+    provider = await get_messaging_provider_async()
     sender = payload.from_number or settings.twilio_caller_id or ""
 
     message = await service.prepare(
@@ -404,3 +409,86 @@ async def record_consent(payload: ConsentWrite, db: DbSession, user: SendUser) -
     await db.commit()
     await db.refresh(consent)
     return ConsentRead.model_validate(consent)
+
+
+# --- bulk campaigns ---------------------------------------------------
+
+
+def _campaign_read(campaign, progress=None) -> CampaignRead:  # noqa: ANN001
+    base = CampaignRead.model_validate(campaign).model_dump(
+        exclude={"percent_complete", "remaining"}
+    )
+    return CampaignRead(
+        **base,
+        percent_complete=progress.percent if progress else 0,
+        remaining=progress.remaining if progress else campaign.total_recipients,
+    )
+
+
+@router.get("/campaigns", response_model=list[CampaignRead], summary="Bulk sends")
+async def list_campaigns(db: DbSession, user: InboxUser) -> list[CampaignRead]:
+    rows = await db.execute(
+        select(MessageCampaign)
+        .where(MessageCampaign.organization_id == user.organization_id)
+        .order_by(MessageCampaign.created_at.desc())
+    )
+    service = MessageCampaignService(db)
+    out = []
+    for campaign in rows.scalars():
+        out.append(_campaign_read(campaign, await service.refresh_progress(campaign)))
+    return out
+
+
+@router.post(
+    "/campaigns",
+    response_model=CampaignRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a bulk send",
+)
+async def create_campaign(payload: CampaignCreate, db: DbSession, user: SendUser) -> CampaignRead:
+    """Created as a draft, already carrying its recipient count and quote.
+
+    Nobody should discover the cost of a five-thousand-message campaign from
+    their balance afterwards.
+    """
+    campaign = await MessageCampaignService(db).create(
+        organization_id=user.organization_id,
+        name=payload.name,
+        channel=payload.channel,
+        body=payload.body,
+        template_id=payload.template_id,
+        lead_list_id=payload.lead_list_id,
+        from_number=payload.from_number or settings.twilio_caller_id or "",
+        messages_per_minute=payload.messages_per_minute,
+        scheduled_at=payload.scheduled_at,
+        user_id=user.id,
+    )
+    return _campaign_read(campaign)
+
+
+@router.post(
+    "/campaigns/{campaign_id}/{action}",
+    response_model=CampaignRead,
+    summary="Launch, pause, resume or cancel",
+)
+async def control_campaign(
+    campaign_id: uuid.UUID, action: str, db: DbSession, user: SendUser
+) -> CampaignRead:
+    """Cancelling stops future sends; it cannot recall what already went out."""
+    service = MessageCampaignService(db)
+    campaign = await service.get(campaign_id, user.organization_id)
+
+    if action in ("launch", "resume"):
+        campaign = await service.launch(campaign)
+    elif action == "pause":
+        campaign = await service.set_status(campaign, MessageCampaignStatus.PAUSED)
+    elif action == "cancel":
+        campaign = await service.set_status(campaign, MessageCampaignStatus.CANCELLED)
+    elif action == "send-now":
+        # Dispatch one slice immediately, so the UI shows movement rather
+        # than waiting on the next worker tick.
+        await service.dispatch_slice(campaign)
+    else:
+        raise NotFoundError(f"Unknown action {action!r}")
+
+    return _campaign_read(campaign, await service.refresh_progress(campaign))

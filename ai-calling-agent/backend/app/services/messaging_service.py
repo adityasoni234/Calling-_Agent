@@ -259,8 +259,17 @@ class MessagingService:
     # --- quoting -------------------------------------------------------
 
     @staticmethod
-    def _billable(channel: Channel, *, template: bool = False) -> Billable:
-        if channel is Channel.SMS:
+    def _billable(channel: Channel | str, *, template: bool = False) -> Billable:
+        """Which price rule applies.
+
+        Compares by value, not identity. Channel is a StrEnum, so a caller
+        that hands over the plain string "sms" -- from a JSON body, a queued
+        job, or a column read back raw -- is asking for the same thing. An
+        `is` comparison silently fell through to the WhatsApp rule, which
+        prices SMS at the wrong rate or, with no WhatsApp rule published, at
+        nothing at all.
+        """
+        if Channel(channel) is Channel.SMS:
             return Billable.SMS_OUTBOUND
         return Billable.WHATSAPP_TEMPLATE if template else Billable.WHATSAPP_OUTBOUND
 

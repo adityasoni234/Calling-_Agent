@@ -885,3 +885,29 @@ export interface ProviderHealth {
   detail: string;
   checked_at: string;
 }
+
+export interface MessageCampaign {
+  id: string;
+  name: string;
+  channel: Channel;
+  status: string;
+  body: string | null;
+  template_id: string | null;
+  lead_list_id: string | null;
+  from_number: string | null;
+  messages_per_minute: number;
+  scheduled_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  total_recipients: number;
+  sent_count: number;
+  delivered_count: number;
+  failed_count: number;
+  suppressed_count: number;
+  estimated_charge_usd: string | null;
+  actual_charge_usd: string | null;
+  created_at: string;
+  /** Server-computed so the UI never re-derives it and disagrees. */
+  percent_complete: number;
+  remaining: number;
+}

@@ -19,9 +19,21 @@ if TYPE_CHECKING:
 class UserRole(enum.StrEnum):
     """Roles exist from day one so RBAC is an enforcement change, not a schema one."""
 
+    #: Owns the account: billing, team, everything below.
     OWNER = "owner"
+    #: Runs the product day to day, including agents and integrations.
     ADMIN = "admin"
+    #: Money without the product: invoices, refunds, credits, no call content.
+    FINANCE_ADMIN = "finance_admin"
+    #: Helps customers: reads conversations and call content, changes nothing
+    #: commercial. The widest read access and the narrowest write access,
+    #: which is deliberately the opposite shape to finance.
+    SUPPORT_ADMIN = "support_admin"
+    #: Keeps the pipes running: providers and settings, no customer money.
+    OPERATIONS_ADMIN = "operations_admin"
+    #: Does the outreach.
     OPERATOR = "operator"
+    #: Reads dashboards.
     VIEWER = "viewer"
 
 

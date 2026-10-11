@@ -45,6 +45,11 @@ class Billable(enum.StrEnum):
     WHATSAPP_OUTBOUND = "whatsapp_outbound"
     WHATSAPP_INBOUND = "whatsapp_inbound"
     WHATSAPP_TEMPLATE = "whatsapp_template"
+    EMAIL_OUTBOUND = "email_outbound"
+    #: Running a list through syntax, DNS and suppression checks. Priced
+    #: separately because validating 50,000 addresses has a real cost even
+    #: when none of them are mailed.
+    EMAIL_VALIDATION = "email_validation"
     RECORDING = "recording"
     STORAGE = "storage"
     TRANSCRIPTION = "transcription"

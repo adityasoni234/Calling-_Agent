@@ -118,6 +118,24 @@ def _rules(voice_rate: str) -> list[dict]:
             "notes": "Inbound is not charged to the customer.",
         },
         {
+            # Bulk email is cents per thousand at every provider, so this is
+            # priced per message in millionths rather than cents.
+            "billable": Billable.EMAIL_OUTBOUND,
+            "rate_kind": RateKind.PER_UNIT,
+            "rate": Decimal("0.0008"),
+            "rounding": Rounding.NONE,
+            "assumed_cost": Decimal("0.0002"),
+            "notes": "Per delivered email. Validation is charged separately.",
+        },
+        {
+            "billable": Billable.EMAIL_VALIDATION,
+            "rate_kind": RateKind.PER_UNIT,
+            "rate": Decimal("0.0002"),
+            "rounding": Rounding.NONE,
+            "assumed_cost": Decimal("0.00005"),
+            "notes": "Per address checked, whether or not it is then mailed.",
+        },
+        {
             "billable": Billable.RECORDING,
             "rate_kind": RateKind.PER_MINUTE,
             "rate": Decimal("0.005"),

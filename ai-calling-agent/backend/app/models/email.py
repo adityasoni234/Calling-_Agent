@@ -48,8 +48,9 @@ class EmailVerdict(enum.StrEnum):
 
     #: Syntax, domain and MX all passed. Eligible to send.
     VALID = "valid"
-    #: Reachable but carries a known risk: role account, disposable domain,
-    #: catch-all. Sending is an org-level decision.
+    #: Carries a known risk -- role account, disposable domain, catch-all.
+    #: Claims nothing about reachability; it says do not bulk-send this
+    #: without deciding to. Sending is an org-level choice.
     RISKY = "risky"
     #: Syntax or domain failed. Never sent, in any configuration.
     INVALID = "invalid"

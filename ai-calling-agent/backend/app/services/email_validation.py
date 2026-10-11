@@ -323,6 +323,18 @@ class EmailValidator:
 
         flags = risk_flags(address)
         if not check_dns:
+            # A role account or disposable domain is known from the address
+            # itself; it does not become less risky because DNS was skipped.
+            # Reachability is what stays unknown, and the confidence says so.
+            if flags:
+                return Validation(
+                    address,
+                    EmailVerdict.RISKY,
+                    ValidationMethod.SYNTAX,
+                    50,
+                    "Risk flagged from the address; domain not checked",
+                    flags,
+                )
             return Validation(
                 address,
                 EmailVerdict.UNKNOWN,

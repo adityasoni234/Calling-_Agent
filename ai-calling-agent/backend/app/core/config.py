@@ -70,6 +70,18 @@ class Settings(BaseSettings):
     #: "mock" records sends without a carrier account, so the whole path runs
     #: locally and in tests. "twilio" uses real credentials.
     messaging_provider: str = "mock"
+    #: "mock", "smtp" (works with SES, Mailgun, anything) or "postmark".
+    email_provider: str = "mock"
+
+    # --- email delivery -------------------------------------------------
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    postmark_token: str = ""
+    #: Where unsubscribe links point. Must be publicly reachable or the
+    #: one-click header Gmail requires will not work.
+    email_public_base_url: str = ""
     stt_provider: str = "mock"
     llm_provider: str = "mock"
     tts_provider: str = "mock"

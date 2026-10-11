@@ -1,0 +1,136 @@
+# Render deployment.
+#
+# The point of this file is a *stable* HTTPS URL. Every OAuth callback and
+# every provider webhook has to be registered with the provider in advance
+# and matched exactly:
+#
+#   Google    /api/v1/email/mailbox/callback
+#   Meta      /api/v1/meta/callback and /api/v1/meta/webhook
+#   Twilio    /api/v1/webhooks/telephony/* and /api/v1/webhooks/messaging/*
+#   Razorpay  its own webhook endpoint
+#
+# A Cloudflare quick tunnel gets a new hostname every day or two, so each of
+# those would need re-registering in four different dashboards. That is the
+# real blocker on connecting Google, not the OAuth code.
+#
+# Deploy:  push this file, then New → Blueprint on render.com and point it
+# at the repository. Set the secret environment variables in the dashboard;
+# they are deliberately not in here.
+
+services:
+  - type: web
+    name: stockvala-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # Free works for OAuth callbacks, where a cold start is a slow redirect.
+    # It is the wrong choice for telephony: Twilio abandons a webhook after
+    # about 15 seconds and a cold container can take 30, so a call would
+    # fail rather than be delayed. Move to starter before dialling for real.
+    plan: free
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PUBLIC_BASE_URL
+        # Render injects the service's own https URL, so the value cannot
+        # drift out of step with where the service actually lives.
+        fromService:
+          type: web
+          name: stockvala-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stockvala-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: stockvala-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://stockvala-agent.web.app,https://stockvala-admin.web.app
+      - key: ALLOW_REGISTRATION
+        value: "true"
+      # Providers start in mock so a fresh deploy cannot place a real call
+      # or send a real email before anyone has configured it.
+      - key: TELEPHONY_PROVIDER
+        value: mock
+      - key: EMAIL_PROVIDER
+        value: mailbox
+      - key: MESSAGING_PROVIDER
+        value: mock
+      # Set these in the dashboard, not here. sync:false keeps Render from
+      # treating a blank as a value to apply.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_VERIFY_TOKEN
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_CALLER_ID
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: CARTESIA_API_KEY
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+
+  - type: worker
+    name: stockvala-worker
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    dockerCommand: python -m app.tasks.worker
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stockvala-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: stockvala-redis
+          property: connectionString
+      - key: SECRET_KEY
+        # Must match the web service: the same key decrypts provider
+        # credentials, and a mismatch surfaces as every secret being
+        # unreadable rather than as a configuration error.
+        fromService:
+          type: web
+          name: stockvala-api
+          envVarKey: SECRET_KEY
+
+  - type: redis
+    name: stockvala-redis
+    plan: free
+    ipAllowList: []
+
+databases:
+  - name: stockvala-db
+    plan: free
+    postgresMajorVersion: "16"

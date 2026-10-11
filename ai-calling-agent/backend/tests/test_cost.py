@@ -89,6 +89,36 @@ async def test_a_verified_rate_prices_the_line(context) -> None:
     assert call.cost_incomplete is False
 
 
+async def test_an_inr_rate_is_converted_before_storing_usd_cost(context, monkeypatch) -> None:
+    """All cost analytics use USD, even when a supplier quotes us in INR."""
+    db, user, call = context
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "usd_inr_rate", 80.0)
+    db.add(
+        PricingRate(
+            organization_id=user.organization_id,
+            component="telephony",
+            provider="mock",
+            unit="minute",
+            rate=4.8,
+            currency="INR",
+            source_url="https://example.com/inr-pricing",
+            verified_at=datetime.now(UTC),
+        )
+    )
+    await db.commit()
+
+    total, incomplete = await CostService(db).record_usage(
+        call=call,
+        records=[UsageRecord(UsageComponent.TELEPHONY, "mock", "minute", 2.0, None)],
+    )
+
+    assert incomplete is False
+    assert total == pytest.approx(0.12)
+    assert call.cost_usd == pytest.approx(0.12)
+
+
 async def test_per_thousand_units_are_divided_correctly(context) -> None:
     db, user, call = context
     db.add(

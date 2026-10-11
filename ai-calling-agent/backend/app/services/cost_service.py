@@ -47,6 +47,29 @@ class CostService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
+    @staticmethod
+    def _cost_in_usd(rate: PricingRate, quantity: float) -> float | None:
+        """Turn a verified rate into the USD cost stored on call usage.
+
+        ``Call.cost_usd`` and every budget/margin aggregate are deliberately
+        denominated in USD.  A rate row carries its own currency, however, and
+        treating an INR rate as USD turns (for example) Rs4.80/min into
+        $4.80/min.  That makes the dashboard, credit charge, and margin wrong
+        by roughly two orders of magnitude.
+
+        We support the two currencies the product currently sells or pays in.
+        An unsupported historical row remains visibly unpriced instead of
+        producing a plausible-looking but false total.
+        """
+        divisor = UNIT_DIVISOR.get(rate.unit, 1.0)
+        amount = (quantity / divisor) * rate.rate
+        currency = rate.currency.upper()
+        if currency == "USD":
+            return amount
+        if currency == "INR":
+            return amount / settings.usd_inr_rate
+        return None
+
     async def _find_rate(
         self, organization_id: uuid.UUID, record: UsageRecord
     ) -> PricingRate | None:
@@ -98,8 +121,8 @@ class CostService:
             rate = await self._find_rate(call.organization_id, record)
             cost: float | None = None
             if rate is not None:
-                divisor = UNIT_DIVISOR.get(rate.unit, 1.0)
-                cost = (record.quantity / divisor) * rate.rate
+                cost = self._cost_in_usd(rate, record.quantity)
+            if cost is not None:
                 total += cost
             else:
                 incomplete = True
@@ -155,8 +178,10 @@ class CostService:
             rate = await self._find_rate(organization_id, record)
             if rate is None:
                 continue
-            divisor = UNIT_DIVISOR.get(rate.unit, 1.0)
-            line.cost_usd = (line.quantity / divisor) * rate.rate
+            cost = self._cost_in_usd(rate, line.quantity)
+            if cost is None:
+                continue
+            line.cost_usd = cost
             line.priced = True
             priced_lines += 1
             touched_calls.add(line.call_id)

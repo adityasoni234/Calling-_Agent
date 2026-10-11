@@ -9,6 +9,7 @@ from httpx import AsyncClient
 from pydantic import ValidationError
 from sqlalchemy import select
 
+from app.models.billing import CreditEntry, CreditEntryKind
 from app.models.call import Call, CallStatus, CallTurn
 from app.models.lead import InterestLevel, Lead, LeadStatus
 from app.models.user import User
@@ -98,6 +99,36 @@ async def test_an_empty_transcript_is_not_summarised(db_session, agent: dict) ->
     assert await PostCallService(db_session).process(call.id) is None
     await db_session.refresh(call)
     assert call.summary == "No conversation took place."
+
+
+async def test_a_completed_call_without_a_transcript_is_still_billed(
+    db_session, agent: dict
+) -> None:
+    """Analysis availability must not decide whether provider usage is charged."""
+    user = (
+        (await db_session.execute(select(User).where(User.email == "owner@example.com")))
+        .unique()
+        .scalar_one()
+    )
+    call = Call(
+        organization_id=user.organization_id,
+        agent_id=uuid.UUID(agent["id"]),
+        status=CallStatus.COMPLETED,
+        provider="mock",
+        duration_seconds=30,
+        cost_usd=0.05,
+    )
+    db_session.add(call)
+    await db_session.commit()
+
+    assert await PostCallService(db_session).process(call.id) is None
+    entry = await db_session.scalar(
+        select(CreditEntry).where(
+            CreditEntry.call_id == call.id, CreditEntry.kind == CreditEntryKind.USAGE
+        )
+    )
+    assert entry is not None
+    assert entry.provider_cost_usd == pytest.approx(0.05)
 
 
 def test_extraction_schema_rejects_an_out_of_range_score() -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProviderStatus(BaseModel):
@@ -51,6 +51,14 @@ class PricingRateCreate(BaseModel):
     # Mandatory: a rate without a source is how a cost model becomes fiction.
     source_url: str = Field(min_length=5, max_length=600)
     verified_at: datetime
+
+    @field_validator("currency")
+    @classmethod
+    def supported_currency(cls, value: str) -> str:
+        currency = value.strip().upper()
+        if currency not in {"USD", "INR"}:
+            raise ValueError("Only USD and INR pricing rates are supported")
+        return currency
 
 
 class PricingRateRead(PricingRateCreate):

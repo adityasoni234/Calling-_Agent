@@ -90,10 +90,15 @@ class PostCallService:
             log.info("postcall.skipped", call_id=str(call_id), reason="empty transcript")
             call.summary = "No conversation took place."
             await self.db.commit()
+            await self._charge_completed_call(call)
             return None
 
         extraction = await self._extract(call, transcript)
         if extraction is None:
+            # A failed summary/extraction must not turn a completed provider
+            # call into unbilled usage.  Its metered telephony/STT/TTS records
+            # are already durable, and charging is idempotent by call id.
+            await self._charge_completed_call(call)
             return None
 
         call.summary = extraction.summary
@@ -106,13 +111,7 @@ class PostCallService:
         log.info("postcall.done", call_id=str(call_id), score=extraction.lead_score)
         await self._notify_integrations(call, extraction)
 
-        # Bill the customer now that the real cost is known. A billing failure
-        # must never lose the call record -- we can re-charge, we cannot
-        # reconstruct a transcript.
-        try:
-            await BillingService(self.db).charge_for_call(call)
-        except Exception as exc:
-            log.error("postcall.billing_failed", call_id=str(call.id), error=str(exc))
+        await self._charge_completed_call(call)
 
         # Credit whichever phrasings this call used. A broken experiment must
         # never cost us the call record, which is the actual product.
@@ -122,6 +121,22 @@ class PostCallService:
         except Exception as exc:
             log.warning("learning.reward_failed", call_id=str(call.id), error=str(exc))
         return extraction
+
+    async def _charge_completed_call(self, call: Call) -> None:
+        """Settle a completed call even when analysis did not run.
+
+        Billing used to live only on the successful transcript-analysis path.
+        A human bridge call, an unanswered-but-billed call, or an LLM extraction
+        outage could therefore leave real provider spend without a usage ledger
+        entry.  ``charge_for_call`` is idempotent and ignores zero-duration
+        calls, so it is safe to use on every terminal post-call path.
+        """
+        try:
+            await BillingService(self.db).charge_for_call(call)
+        except Exception as exc:
+            # The record and its usage must survive a billing failure; the
+            # idempotent charge can be retried during reconciliation.
+            log.error("postcall.billing_failed", call_id=str(call.id), error=str(exc))
 
     async def _notify_integrations(self, call: Call, extraction: CallExtraction) -> None:
         """Tell any subscribed CRM what happened, without blocking the call.

@@ -65,8 +65,8 @@ const STEPS = [
 
 const PROOF = [
   {
-    figure: "Per second",
-    label: "Calls billed by the second you connect, not the minute you dial",
+    figure: "3 languages",
+    label: "English, Hindi and Hinglish — switched automatically, mid-call",
   },
   {
     figure: "Before you send",
@@ -79,6 +79,10 @@ const PROOF = [
 ];
 
 const FAQ = [
+  {
+    q: "Which languages can the agent speak?",
+    a: "English, Hindi and Hinglish. You can pin an agent to one of them, or let it detect the language from the customer's first few words and follow them if they switch part-way through. It is the same agent and the same script either way — you do not maintain three versions.",
+  },
   {
     q: "What does a call actually cost?",
     a: "You are charged per connected minute at your plan rate, and you see the figure before you dial. Calls that never connect cost nothing. Our own provider cost sits behind that, and the margin is shown to you rather than hidden in a bundle.",
@@ -186,15 +190,20 @@ export function LandingPage() {
         {/* Hero */}
         <section className="mx-auto max-w-6xl px-5 pb-16 pt-16 sm:px-8 sm:pb-24 sm:pt-24">
           <p className="text-2xs font-medium uppercase tracking-[0.18em] text-brand-700">
-            Calls · SMS · WhatsApp · Email
+            English ·{" "}
+            {/* Letter-spacing pulls Devanagari conjuncts apart and uppercase
+                does nothing to them, so this script opts out of both. */}
+            <span className="tracking-normal normal-case">हिन्दी</span> ·
+            Hinglish
           </p>
           <h1 className="mt-5 max-w-3xl font-display text-4xl leading-[1.08] text-ink-900 sm:text-6xl">
-            Follow up with every lead, the same day they arrive.
+            An AI agent that talks to your customers in their own language.
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-600">
-            An AI agent that calls, texts, messages and emails your leads — then
-            tells you which ones are worth your time, with the transcript and
-            the reason. You work the short list.
+            It calls in English, Hindi or Hinglish — and switches the moment the
+            customer does, mid-sentence, without being told. Then it texts,
+            WhatsApps and emails the same lead, and tells you which ones are
+            worth your time.
           </p>
           {/* Someone already signed in is not a prospect. Offering them
               "Start free" next to a nav that says "Go to dashboard" reads as
@@ -240,6 +249,61 @@ export function LandingPage() {
               </div>
             ))}
           </dl>
+        </section>
+
+        {/* Language */}
+        <section className="border-y border-ink-200/60 bg-brand-700">
+          <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-20">
+            <h2 className="max-w-2xl font-display text-3xl leading-tight text-white sm:text-4xl">
+              Most people do not buy in their second language.
+            </h2>
+            <p className="mt-5 max-w-2xl text-base leading-relaxed text-white/75">
+              A lead who answers in Hindi and gets an English script hangs up.
+              Our agent hears which language they chose and answers in it —
+              including the mix of both that most people actually speak.
+            </p>
+
+            <div className="mt-11 grid gap-x-10 gap-y-8 sm:grid-cols-3">
+              {[
+                {
+                  lang: "English",
+                  native: "English",
+                  body: "Neutral Indian English, at the pace of a phone call rather than a voice assistant.",
+                },
+                {
+                  lang: "Hindi",
+                  native: "हिन्दी",
+                  body: "Natural Hindi, not transliterated English read aloud.",
+                },
+                {
+                  lang: "Hinglish",
+                  native: "Hinglish",
+                  body: "The way most of your customers genuinely talk — switching between the two inside a sentence.",
+                },
+              ].map((item) => (
+                <div key={item.lang} className="border-t border-white/20 pt-5">
+                  <p className="font-display text-2xl text-white">
+                    {item.native}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-white/70">
+                    {item.body}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-11 rounded-2xl bg-white/10 px-6 py-5">
+              <p className="text-2xs font-medium uppercase tracking-[0.1em] text-white/60">
+                Automatic switching
+              </p>
+              <p className="mt-2.5 max-w-3xl text-sm leading-relaxed text-white/85">
+                Set the agent to detect the language and it picks one up from
+                the first few words, then follows the customer if they change.
+                You can also pin it to a single language when you know your
+                list.
+              </p>
+            </div>
+          </div>
         </section>
 
         {/* Channels */}

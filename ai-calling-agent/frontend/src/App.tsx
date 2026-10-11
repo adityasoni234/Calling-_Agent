@@ -14,7 +14,9 @@ import { KnowledgePage } from "@/pages/KnowledgePage";
 import { LeadsPage } from "@/pages/LeadsPage";
 import { LearningPage } from "@/pages/LearningPage";
 import { LandingPage } from "@/pages/LandingPage";
+import { EmailPage } from "@/pages/EmailPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { MetaAdsPage } from "@/pages/MetaAdsPage";
 import { ManualCallPage } from "@/pages/ManualCallPage";
 import { SmsPage } from "@/pages/SmsPage";
 import { WhatsAppPage } from "@/pages/WhatsAppPage";
@@ -52,6 +54,8 @@ export default function App() {
             <Route path="/manual" element={<ManualCallPage />} />
             <Route path="/sms" element={<SmsPage />} />
             <Route path="/whatsapp" element={<WhatsAppPage />} />
+            <Route path="/email" element={<EmailPage />} />
+            <Route path="/meta-ads" element={<MetaAdsPage />} />
             {/* The old combined page; keep the path working for bookmarks. */}
             <Route path="/messages" element={<Navigate to="/sms" replace />} />
             <Route path="/calls/:id" element={<CallDetailPage />} />

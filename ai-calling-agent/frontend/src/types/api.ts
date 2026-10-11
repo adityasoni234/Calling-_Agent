@@ -972,3 +972,130 @@ export interface MessagingReadiness {
   /** Channels that would send but bill nothing. */
   unpriced_channels: string[];
 }
+
+// --- email ------------------------------------------------------------
+
+export type EmailVerdict =
+  "valid" | "risky" | "invalid" | "suppressed" | "unknown";
+
+export interface AddressVerdict {
+  address: string;
+  verdict: EmailVerdict;
+  /** Which check decided it — a claim is held to how it was reached. */
+  method: string;
+  /** 0–99. Never 100: nothing short of a delivery proves an address works. */
+  confidence: number;
+  reason: string | null;
+  flags: string[];
+}
+
+export interface ValidationSummary {
+  total: number;
+  duplicates_removed: number;
+  valid: number;
+  risky: number;
+  invalid: number;
+  suppressed: number;
+  unknown: number;
+  results: AddressVerdict[];
+  truncated: boolean;
+}
+
+export interface EmailMessageRow {
+  id: string;
+  campaign_id: string | null;
+  to_address: string;
+  from_address: string;
+  subject: string;
+  status: string;
+  verdict_at_send: string | null;
+  provider: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  customer_charge_usd: string | null;
+  cost_incomplete: boolean;
+  sent_at: string | null;
+  delivered_at: string | null;
+  opened_at: string | null;
+  created_at: string;
+}
+
+export interface EmailCampaignRow {
+  id: string;
+  name: string;
+  status: string;
+  subject: string;
+  from_address: string;
+  from_name: string;
+  include_risky: boolean;
+  total_recipients: number;
+  valid_count: number;
+  risky_count: number;
+  invalid_count: number;
+  suppressed_count: number;
+  unknown_count: number;
+  sent_count: number;
+  delivered_count: number;
+  opened_count: number;
+  clicked_count: number;
+  bounced_count: number;
+  complained_count: number;
+  unsubscribed_count: number;
+  estimated_charge_usd: string | null;
+  actual_charge_usd: string | null;
+  validated_at: string | null;
+  consent_confirmed_at: string | null;
+  created_at: string;
+  eligible_count: number;
+}
+
+export interface EmailSuppressionRow {
+  id: string;
+  address: string;
+  reason: string;
+  detail: string | null;
+  created_at: string;
+}
+
+export interface EmailReadiness {
+  ready: boolean;
+  blockers: string[];
+  provider: string;
+  unpriced: boolean;
+  suppressed_total: number;
+}
+
+// --- meta ads ---------------------------------------------------------
+
+export interface MetaAssetRow {
+  id: string;
+  kind: string;
+  meta_id: string;
+  name: string;
+  parent_meta_id: string | null;
+  is_selected: boolean;
+  is_subscribed: boolean;
+}
+
+export interface MetaConnectionRow {
+  id: string;
+  meta_user_name: string | null;
+  status: string;
+  status_detail: string | null;
+  /** Masked tail only. The token itself never reaches the browser. */
+  token_hint: string;
+  token_expires_at: string | null;
+  is_usable: boolean;
+  scopes: string[];
+  last_synced_at: string | null;
+  last_lead_at: string | null;
+  leads_received: number;
+  assets: MetaAssetRow[];
+}
+
+export interface MetaStatus {
+  platform_configured: boolean;
+  blockers: string[];
+  connections: MetaConnectionRow[];
+  required_scopes: string[];
+}

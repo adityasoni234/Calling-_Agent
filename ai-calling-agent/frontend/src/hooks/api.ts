@@ -9,7 +9,14 @@ import type {
   Message as SmsMessage,
   MessageCampaign,
   MessageTemplate,
+  AddressVerdict,
+  EmailCampaignRow,
+  EmailMessageRow,
+  EmailReadiness,
+  EmailSuppressionRow,
   MessagingReadiness,
+  MetaStatus,
+  ValidationSummary,
   SendEstimate,
   Suppression,
   Checkout,
@@ -987,3 +994,145 @@ export function useSyncTemplates() {
     },
   });
 }
+
+// --- email ------------------------------------------------------------
+
+export function useEmailReadiness() {
+  return useQuery({
+    queryKey: ["email-readiness"],
+    queryFn: () => api.get<EmailReadiness>("/email/readiness"),
+    staleTime: 60_000,
+  });
+}
+
+export function useValidateAddresses() {
+  return useMutation({
+    mutationFn: (body: { addresses: string[]; check_dns?: boolean }) =>
+      api.post<ValidationSummary>("/email/validate", body),
+  });
+}
+
+export function useEmailMessages(page = 1, status?: string) {
+  return useQuery({
+    queryKey: ["email-messages", page, status],
+    queryFn: () =>
+      api.get<Page<EmailMessageRow>>(
+        `/email/messages${query({ page, status, page_size: 50 })}`,
+      ),
+  });
+}
+
+export function useSendEmail() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      to_address: string;
+      subject: string;
+      text_body: string;
+      html_body?: string;
+      from_address?: string;
+      allow_risky?: boolean;
+    }) => api.post<EmailMessageRow>("/email/messages", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["email-messages"] }),
+  });
+}
+
+export function useEmailCampaigns() {
+  return useQuery({
+    queryKey: ["email-campaigns"],
+    queryFn: () => api.get<EmailCampaignRow[]>("/email/campaigns"),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useCreateEmailCampaign() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      api.post<EmailCampaignRow>("/email/campaigns", body),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["email-campaigns"] }),
+  });
+}
+
+export function useValidateEmailCampaign() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<Record<string, unknown>>(`/email/campaigns/${id}/validate`, {}),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["email-campaigns"] }),
+  });
+}
+
+export function useControlEmailCampaign() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: string }) =>
+      api.post<EmailCampaignRow>(`/email/campaigns/${id}/${action}`, {}),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["email-campaigns"] }),
+  });
+}
+
+export function useEmailSuppressions(page = 1) {
+  return useQuery({
+    queryKey: ["email-suppressions", page],
+    queryFn: () =>
+      api.get<Page<EmailSuppressionRow>>(
+        `/email/suppressions${query({ page, page_size: 50 })}`,
+      ),
+  });
+}
+
+export function useRemoveEmailSuppression() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/email/suppressions/${id}`),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["email-suppressions"] }),
+  });
+}
+
+// --- meta ads ---------------------------------------------------------
+
+export function useMetaStatus() {
+  return useQuery({
+    queryKey: ["meta-status"],
+    queryFn: () => api.get<MetaStatus>("/meta/status"),
+    retry: false,
+  });
+}
+
+export function useMetaConnect() {
+  return useMutation({
+    mutationFn: () => api.post<{ authorize_url: string }>("/meta/connect", {}),
+  });
+}
+
+export function useMetaSync() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/meta/connections/${id}/sync`, {}),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["meta-status"] }),
+  });
+}
+
+export function useMetaSelectAsset() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, selected }: { id: string; selected: boolean }) =>
+      api.post(`/meta/assets/${id}/select?selected=${selected}`, {}),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["meta-status"] }),
+  });
+}
+
+export function useMetaDisconnect() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/meta/connections/${id}`),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["meta-status"] }),
+  });
+}
+
+export type { AddressVerdict };

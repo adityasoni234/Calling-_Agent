@@ -61,6 +61,12 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z",
       },
       {
+        to: "/email",
+        label: "Email",
+        hint: "Bulk email, checked before it sends",
+        icon: "M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm0 0l9 6 9-6",
+      },
+      {
         to: "/whatsapp",
         label: "WhatsApp",
         hint: "WhatsApp messages, templates and approvals",
@@ -82,6 +88,12 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Leads",
         hint: "Everyone you can call, grouped by uploaded sheet",
         icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM3 21v-1a6 6 0 016-6h6a6 6 0 016 6v1",
+      },
+      {
+        to: "/meta-ads",
+        label: "Meta Ads",
+        hint: "Pull leads straight from your Facebook and Instagram forms",
+        icon: "M12 2a10 10 0 100 20 10 10 0 000-20zM8 12h8M12 8v8",
       },
       {
         to: "/qualified",

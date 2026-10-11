@@ -34,6 +34,13 @@ class Capability(enum.StrEnum):
     MANAGE_BILLING = "manage_billing"
     MANAGE_INTEGRATIONS = "manage_integrations"
     MANAGE_SETTINGS = "manage_settings"
+
+    # Messaging reaches a customer's phone and costs money per segment, so it
+    # is gated like calling rather than bundled into general write access.
+    SEND_MESSAGES = "send_messages"
+    MANAGE_TEMPLATES = "manage_templates"
+    #: Reading other people's conversations is a privacy surface of its own.
+    VIEW_CONVERSATIONS = "view_conversations"
     MANAGE_TEAM = "manage_team"
 
 
@@ -45,10 +52,15 @@ _OPERATOR = _VIEWER | {
     Capability.PLACE_CALLS,
     Capability.RUN_CAMPAIGNS,
     Capability.MANAGE_LEADS,
+    # An operator's job is reaching contacts; messaging is that job by
+    # another channel. Approving the templates they send is not.
+    Capability.SEND_MESSAGES,
+    Capability.VIEW_CONVERSATIONS,
 }
 
 _ADMIN = _OPERATOR | {
     Capability.MANAGE_AGENTS,
+    Capability.MANAGE_TEMPLATES,
     Capability.MANAGE_KNOWLEDGE,
     Capability.MANAGE_INTEGRATIONS,
     Capability.MANAGE_SETTINGS,

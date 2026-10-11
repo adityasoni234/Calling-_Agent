@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     leads,
     learning,
     media,
+    messaging,
     platform,
     settings_api,
     webhooks,
@@ -36,3 +37,4 @@ api_router.include_router(integrations.router)
 api_router.include_router(learning.router)
 api_router.include_router(webhooks.router)
 api_router.include_router(media.router)
+api_router.include_router(messaging.router)

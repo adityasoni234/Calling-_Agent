@@ -441,3 +441,178 @@ async def test_sms_and_whatsapp_to_one_number_are_separate_threads(
         select(Conversation).where(Conversation.organization_id == org.id)
     )
     assert len(list(rows.scalars())) == 2
+
+
+# --- the API ----------------------------------------------------------
+
+
+async def _second_org(client) -> dict[str, str]:
+    response = await client.post(
+        "/auth/register",
+        json={
+            **REGISTRATION,
+            "email": "rival@example.com",
+            "organization_name": "Rival Co",
+        },
+    )
+    return {"Authorization": f"Bearer {response.json()['tokens']['access_token']}"}
+
+
+async def test_the_messaging_api_is_closed_to_anonymous_callers(client) -> None:
+    assert (await client.get("/messaging/conversations")).status_code == 401
+    assert (await client.post("/messaging/messages", json={})).status_code == 401
+
+
+async def test_sending_through_the_api_records_the_server_decided_price(
+    client, auth_headers, db_session
+) -> None:
+    """The client sends a recipient and a body. It never sends a price."""
+    org = await _org(db_session)
+    await _price(db_session, Billable.SMS_OUTBOUND, rate="0.015")
+
+    response = await client.post(
+        "/messaging/messages",
+        json={"to_number": TO, "channel": "sms", "body": "Hello there"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "queued"
+    assert body["to_number"] == TO
+    assert body["segments"] == 1
+    # Serialised as a string: a JSON number is a float and would reintroduce
+    # exactly the drift the Decimal migration removed.
+    assert body["customer_charge_usd"] == "0.015000"
+    assert isinstance(body["customer_charge_usd"], str)
+    assert str(org.id)  # the send was scoped to this tenant
+
+
+async def test_a_suppressed_send_is_a_201_with_an_explanation_not_an_error(
+    client, auth_headers, db_session
+) -> None:
+    """The request succeeded and produced a record; a 4xx would read as a bug."""
+    await _price(db_session, Billable.SMS_OUTBOUND)
+    await client.post(
+        "/messaging/suppressions",
+        json={"contact_number": TO, "reason": "opt_out"},
+        headers=auth_headers,
+    )
+    response = await client.post(
+        "/messaging/messages",
+        json={"to_number": TO, "channel": "sms", "body": "Hello"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    assert response.json()["status"] == "suppressed"
+    assert response.json()["suppression_reason"] == "opt_out"
+
+
+async def test_an_estimate_needs_no_permission_to_spend(client, auth_headers, db_session) -> None:
+    await _price(db_session, Billable.SMS_OUTBOUND, rate="0.01")
+    response = await client.post(
+        "/messaging/estimate",
+        json={"channel": "sms", "recipients": [TO, "+919876543212"], "body": "Hi"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["billable_recipients"] == 2
+    assert body["total_segments"] == 2
+    assert body["customer_charge_usd"] == "0.020000"
+
+
+async def test_a_template_cannot_be_born_approved(client, auth_headers) -> None:
+    """Only the provider approves. A self-approved template bans the sender."""
+    response = await client.post(
+        "/messaging/templates",
+        json={"name": "welcome", "channel": "whatsapp", "body": "Hi {{1}}"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+    assert response.json()["status"] == "draft"
+    assert response.json()["placeholder_count"] == 1
+
+
+async def test_one_tenant_cannot_read_anothers_messages(client, auth_headers, db_session) -> None:
+    await _price(db_session, Billable.SMS_OUTBOUND)
+    mine = await client.post(
+        "/messaging/messages",
+        json={"to_number": TO, "channel": "sms", "body": "Confidential"},
+        headers=auth_headers,
+    )
+    message_id = mine.json()["id"]
+
+    theirs = await _second_org(client)
+    assert (
+        await client.get(f"/messaging/messages/{message_id}", headers=theirs)
+    ).status_code == 404
+    assert (await client.get("/messaging/messages", headers=theirs)).json()["total"] == 0
+
+
+async def test_removing_an_opt_out_does_not_restore_consent(
+    client, auth_headers, db_session
+) -> None:
+    """Un-suppressing must not quietly re-authorise contact."""
+    org_id = (await _org(db_session)).id  # read before expire_all() detaches it
+    service = MessagingService(db_session)
+    await client.post(
+        "/messaging/consent",
+        json={"contact_number": TO, "method": "web_form"},
+        headers=auth_headers,
+    )
+    created = await client.post(
+        "/messaging/suppressions",
+        json={"contact_number": TO, "reason": "opt_out"},
+        headers=auth_headers,
+    )
+    await client.delete(f"/messaging/suppressions/{created.json()['id']}", headers=auth_headers)
+    db_session.expire_all()
+    assert await service.has_consent(org_id, TO, Channel.SMS) is False
+
+
+async def test_the_inbox_lists_threads_newest_first_with_unread_counts(
+    client, auth_headers, db_session
+) -> None:
+    org = await _org(db_session)
+    service = MessagingService(db_session)
+    await service.record_inbound(
+        organization_id=org.id,
+        channel=Channel.SMS,
+        from_number=TO,
+        to_number=FROM,
+        body="Is this still available?",
+        provider="twilio",
+        provider_message_id="SM_api_1",
+    )
+    response = await client.get("/messaging/conversations", headers=auth_headers)
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["unread_count"] == 1
+    assert items[0]["contact_number"] == TO
+
+    assert (await client.get("/messaging/unread", headers=auth_headers)).json()["unread"] == 1
+
+    marked = await client.post(
+        f"/messaging/conversations/{items[0]['id']}/read", headers=auth_headers
+    )
+    assert marked.json()["unread_count"] == 0
+
+
+async def test_the_inbox_reports_whether_a_free_form_whatsapp_reply_is_allowed(
+    client, auth_headers, db_session
+) -> None:
+    """Computed server-side so the UI does not re-derive the 24-hour rule."""
+    org = await _org(db_session)
+    service = MessagingService(db_session)
+    await service.record_inbound(
+        organization_id=org.id,
+        channel=Channel.WHATSAPP,
+        from_number=TO,
+        to_number=FROM,
+        body="Hi",
+        provider="twilio",
+        provider_message_id="SM_api_2",
+    )
+    response = await client.get("/messaging/conversations?channel=whatsapp", headers=auth_headers)
+    assert response.json()["items"][0]["session_open"] is True

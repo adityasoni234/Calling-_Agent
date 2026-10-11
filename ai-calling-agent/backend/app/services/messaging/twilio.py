@@ -248,3 +248,105 @@ def get_messaging_provider() -> MessagingProvider:
         return MockMessaging()
     twilio = TwilioMessaging()
     return twilio if twilio.configured else UnconfiguredMessaging()
+
+
+# --- WhatsApp template approval ---------------------------------------
+#
+# Templates are approved by Meta, not by Twilio and certainly not by us.
+# Twilio's Content API is the submission channel: create a Content resource,
+# then raise a WhatsApp approval request against it. Meta answers in hours to
+# days, so approval status is pulled rather than returned.
+#
+# This needs a WhatsApp Business Account attached to the Twilio project. The
+# shared sandbox cannot host custom templates -- it has its own fixed set --
+# which is the single most common reason a submission fails.
+
+CONTENT_API = "https://content.twilio.com/v1/Content"
+
+
+class TemplateSubmissionError(Exception):
+    """Submission was refused. Carries the provider's own wording."""
+
+
+def _to_content_variables(body: str) -> dict[str, str]:
+    """Meta wants a sample value for every placeholder.
+
+    A submission with no samples is rejected without review, which reads to
+    the sender as "Meta rejected my template" rather than "the request was
+    incomplete".
+    """
+    import re
+
+    return {n: f"sample {n}" for n in sorted(set(re.findall(r"\{\{\s*(\d+)\s*\}\}", body)))}
+
+
+async def submit_template_for_approval(
+    *,
+    credentials: dict[str, str],
+    name: str,
+    body: str,
+    language: str = "en",
+    category: str = "UTILITY",
+) -> tuple[str, str]:
+    """Create the content template and request WhatsApp approval.
+
+    Returns `(content_sid, status)`. Raises with the provider's own message
+    rather than a generic failure, because the useful part of a rejection is
+    always Meta's wording.
+    """
+    sid, token = credentials.get("account_sid", ""), credentials.get("auth_token", "")
+    if not (sid and token):
+        raise TemplateSubmissionError(
+            "Twilio credentials are not configured, so the template cannot be submitted."
+        )
+
+    payload = {
+        "friendly_name": name,
+        "language": language,
+        "variables": _to_content_variables(body),
+        "types": {"twilio/text": {"body": body}},
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        created = await client.post(CONTENT_API, auth=(sid, token), json=payload)
+        if created.status_code >= 400:
+            detail = created.json() if created.content else {}
+            raise TemplateSubmissionError(
+                detail.get("message") or f"Twilio returned HTTP {created.status_code}"
+            )
+        content_sid = created.json().get("sid", "")
+
+        approval = await client.post(
+            f"{CONTENT_API}/{content_sid}/ApprovalRequests/whatsapp",
+            auth=(sid, token),
+            json={"name": name.lower().replace(" ", "_"), "category": category},
+        )
+        if approval.status_code >= 400:
+            detail = approval.json() if approval.content else {}
+            raise TemplateSubmissionError(
+                detail.get("message")
+                or "Twilio accepted the template but refused the approval "
+                "request. This usually means no WhatsApp Business Account is "
+                "attached to the project -- the shared sandbox cannot host "
+                "custom templates."
+            )
+        return content_sid, approval.json().get("status", "pending")
+
+
+async def fetch_template_status(
+    *, credentials: dict[str, str], content_sid: str
+) -> tuple[str, str | None]:
+    """Ask Twilio what Meta decided. Returns `(status, rejection_reason)`."""
+    sid, token = credentials.get("account_sid", ""), credentials.get("auth_token", "")
+    if not (sid and token):
+        return "unknown", "Twilio credentials are not configured"
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{CONTENT_API}/{content_sid}/ApprovalRequests", auth=(sid, token)
+        )
+    if response.status_code >= 400:
+        return "unknown", f"Twilio returned HTTP {response.status_code}"
+
+    whatsapp = (response.json() or {}).get("whatsapp") or {}
+    return whatsapp.get("status", "unknown"), whatsapp.get("rejection_reason")

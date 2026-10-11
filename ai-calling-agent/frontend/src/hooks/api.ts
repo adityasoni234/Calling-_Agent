@@ -960,3 +960,30 @@ export function useMessagingReadiness() {
     staleTime: 60_000,
   });
 }
+
+export function useSubmitTemplate() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, category }: { id: string; category: string }) =>
+      api.post<MessageTemplate>(
+        `/messaging/templates/${id}/submit?category=${category}`,
+        {},
+      ),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["templates"] });
+      client.invalidateQueries({ queryKey: ["messaging-readiness"] });
+    },
+  });
+}
+
+export function useSyncTemplates() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api.post<MessageTemplate[]>("/messaging/templates/sync", {}),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["templates"] });
+      client.invalidateQueries({ queryKey: ["messaging-readiness"] });
+    },
+  });
+}

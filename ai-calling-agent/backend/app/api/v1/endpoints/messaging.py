@@ -7,6 +7,7 @@ charged server-side: nothing here accepts a cost or charge from the client.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -16,7 +17,7 @@ from sqlalchemy import func, select
 from app.api.deps import CurrentUser, DbSession, requires
 from app.api.pagination import PageParam, PageSizeParam, paginate
 from app.core.config import settings
-from app.core.errors import NotFoundError
+from app.core.errors import AppError, NotFoundError, ValidationFailedError
 from app.core.permissions import Capability
 from app.models.messaging import (
     Channel,
@@ -577,3 +578,105 @@ async def readiness(db: DbSession, user: CurrentUser) -> dict:
         "templates": {"total": len(all_templates), "approved": len(approved)},
         "unpriced_channels": unpriced,
     }
+
+
+#: Meta's own categories. Picking the wrong one is a common rejection: a
+#: promotional message submitted as UTILITY is refused on sight.
+TEMPLATE_CATEGORIES = ("UTILITY", "MARKETING", "AUTHENTICATION")
+
+
+@router.post(
+    "/templates/{template_id}/submit",
+    response_model=TemplateRead,
+    summary="Send a template to Meta for approval",
+)
+async def submit_template(
+    template_id: uuid.UUID,
+    db: DbSession,
+    user: TemplateUser,
+    category: str = "UTILITY",
+) -> TemplateRead:
+    """Submit a draft for WhatsApp approval.
+
+    Approval is Meta's decision and takes hours to days, so this only moves
+    the template to PENDING. `/templates/sync` pulls the answer back.
+    """
+    template = await _template(db, user, template_id)
+    if template.status is TemplateStatus.APPROVED:
+        return _template_read(template)
+    if category not in TEMPLATE_CATEGORIES:
+        raise ValidationFailedError(f"Category must be one of {', '.join(TEMPLATE_CATEGORIES)}")
+
+    from app.services.credentials import resolve
+    from app.services.messaging.twilio import (
+        TemplateSubmissionError,
+        submit_template_for_approval,
+    )
+
+    try:
+        content_sid, status_text = await submit_template_for_approval(
+            credentials=await resolve("twilio"),
+            name=template.name,
+            body=template.body,
+            language=template.language,
+            category=category,
+        )
+    except TemplateSubmissionError as exc:
+        # Recorded on the template rather than only returned, so the reason
+        # survives the page refresh that follows a failed submission.
+        template.status = TemplateStatus.REJECTED
+        template.rejection_reason = str(exc)
+        await db.commit()
+        await db.refresh(template)
+        raise AppError(str(exc), code="template_submission_failed") from exc
+
+    template.provider_template_id = content_sid
+    template.status = (
+        TemplateStatus.APPROVED if status_text == "approved" else TemplateStatus.PENDING
+    )
+    template.rejection_reason = None
+    template.provider_synced_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(template)
+    return _template_read(template)
+
+
+@router.post(
+    "/templates/sync",
+    response_model=list[TemplateRead],
+    summary="Ask the provider what Meta decided",
+)
+async def sync_templates(db: DbSession, user: TemplateUser) -> list[TemplateRead]:
+    """Pull approval outcomes for everything awaiting a decision.
+
+    Pull rather than push: Meta answers out of band, and a webhook for it
+    would be one more thing to configure before WhatsApp works at all.
+    """
+    from app.services.credentials import resolve
+    from app.services.messaging.twilio import fetch_template_status
+
+    rows = await db.execute(
+        select(MessageTemplate).where(
+            MessageTemplate.organization_id == user.organization_id,
+            MessageTemplate.provider_template_id.isnot(None),
+            MessageTemplate.status.in_([TemplateStatus.PENDING, TemplateStatus.REJECTED]),
+        )
+    )
+    pending = list(rows.scalars())
+    if not pending:
+        return await list_templates(db, user)
+
+    credentials = await resolve("twilio")
+    for template in pending:
+        status_text, reason = await fetch_template_status(
+            credentials=credentials, content_sid=template.provider_template_id or ""
+        )
+        if status_text == "approved":
+            template.status = TemplateStatus.APPROVED
+            template.rejection_reason = None
+        elif status_text == "rejected":
+            template.status = TemplateStatus.REJECTED
+            template.rejection_reason = reason or "Meta rejected this template"
+        template.provider_synced_at = datetime.now(UTC)
+    await db.commit()
+    return await list_templates(db, user)

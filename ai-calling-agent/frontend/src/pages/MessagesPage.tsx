@@ -21,6 +21,8 @@ import {
   useMessages,
   useRemoveSuppression,
   useSendMessage,
+  useSubmitTemplate,
+  useSyncTemplates,
   useSuppressions,
   useTemplates,
 } from "@/hooks/api";
@@ -521,26 +523,60 @@ function History() {
 
 // --- templates --------------------------------------------------------
 
+/** Meta's own categories. The wrong one is refused on sight. */
+const CATEGORIES = [
+  { value: "UTILITY", label: "Utility — order updates, reminders, receipts" },
+  {
+    value: "MARKETING",
+    label: "Marketing — offers, promotions, re-engagement",
+  },
+  { value: "AUTHENTICATION", label: "Authentication — one-time codes" },
+] as const;
+
 function Templates() {
   const templates = useTemplates();
   const create = useCreateTemplate();
   const remove = useDeleteTemplate();
+  const submit = useSubmitTemplate();
+  const sync = useSyncTemplates();
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [channel, setChannel] = useState<Channel>("whatsapp");
+  const [category, setCategory] = useState("UTILITY");
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async (id: string) => {
+    setError(null);
+    try {
+      await submit.mutateAsync({ id, category });
+    } catch (err) {
+      setError((err as Error)?.message ?? "Could not submit that template");
+    }
+  };
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
       <Card
         title="Your templates"
-        description="WhatsApp requires these to be approved by the provider."
+        description="WhatsApp templates are approved by Meta, not by us. Submit a draft and Meta answers within hours to a few days."
+        actions={
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={sync.isPending}
+            onClick={() => sync.mutate()}
+          >
+            {sync.isPending ? "Checking…" : "Check approvals"}
+          </Button>
+        }
         flush
       >
         <div className="px-5">
+          {error && <Alert tone="error">{error}</Alert>}
           {!templates.data?.length ? (
             <EmptyState
               title="No templates yet"
-              hint="Create one on the right, then submit it to the provider for approval."
+              hint="Create one on the right, then submit it for approval."
             />
           ) : (
             <Table headers={["Name", "Channel", "Status", "Variables", ""]}>
@@ -551,22 +587,44 @@ function Templates() {
                     <p className="mt-0.5 max-w-sm truncate text-2xs text-ink-500">
                       {t.body}
                     </p>
+                    {t.rejection_reason && (
+                      <p className="mt-1 max-w-sm text-2xs leading-relaxed text-red-700">
+                        {t.rejection_reason}
+                      </p>
+                    )}
                   </td>
                   <td>
                     <Badge value={t.channel} />
                   </td>
                   <td>
                     <Badge value={t.status} />
+                    {t.status === "pending" && (
+                      <span className="mt-0.5 block text-2xs text-ink-400">
+                        with Meta
+                      </span>
+                    )}
                   </td>
                   <td className="tabular-nums">{t.placeholder_count}</td>
                   <td className="text-right">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => remove.mutate(t.id)}
-                    >
-                      Delete
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      {t.channel === "whatsapp" && t.status !== "approved" && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={submit.isPending || t.status === "pending"}
+                          onClick={() => void send(t.id)}
+                        >
+                          {t.status === "pending" ? "Submitted" : "Submit"}
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => remove.mutate(t.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -577,7 +635,7 @@ function Templates() {
 
       <Card
         title="New template"
-        description="Saved as a draft. Only the provider can approve it."
+        description="Saved as a draft. Submit it when you are happy with the wording."
       >
         <div className="space-y-4">
           <Select
@@ -588,6 +646,20 @@ function Templates() {
             <option value="whatsapp">WhatsApp</option>
             <option value="sms">SMS</option>
           </Select>
+          {channel === "whatsapp" && (
+            <Select
+              label="Category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              hint="Meta refuses a promotional message submitted as Utility."
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
+          )}
           <Field
             label="Name"
             value={name}
@@ -617,6 +689,15 @@ function Templates() {
               {(create.error as Error)?.message ?? "Could not save."}
             </Alert>
           )}
+          <div className="rounded-xl bg-ink-50 px-4 py-3 text-2xs leading-relaxed text-ink-600">
+            <p className="font-medium text-ink-800">What Meta rejects</p>
+            <ul className="mt-1.5 space-y-1">
+              <li>Vague wording like "we have an update for you"</li>
+              <li>Anything that reads as a cold sales pitch under Utility</li>
+              <li>Placeholders at the very start or end of the message</li>
+              <li>Two placeholders next to each other</li>
+            </ul>
+          </div>
         </div>
       </Card>
     </div>

@@ -21,7 +21,7 @@ import {
   useSuppressions,
   useTemplates,
 } from "@/hooks/api";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatUsd } from "@/lib/format";
 import type { Channel } from "@/types/api";
 
 /**
@@ -378,7 +378,7 @@ function SendPanel({
             <div className="border-t border-ink-200/60 pt-3">
               <Row
                 label="You will be charged"
-                value={`$${quote.customer_charge_usd}`}
+                value={formatUsd(quote.customer_charge_usd)}
                 accent
               />
             </div>
@@ -493,7 +493,7 @@ function History() {
                   </td>
                   <td className="tabular-nums">{m.segments}</td>
                   <td className="tabular-nums">
-                    {m.customer_charge_usd ? `$${m.customer_charge_usd}` : "—"}
+                    {formatUsd(m.customer_charge_usd)}
                   </td>
                   <td className="max-w-xs truncate text-xs text-ink-500">
                     {m.error_message ?? STATUS_HELP[m.status] ?? ""}

@@ -49,3 +49,29 @@ export function formatCredits(credits: number): string {
     maximumFractionDigits: credits < 100 ? 2 : 0,
   }).format(credits);
 }
+
+/**
+ * A USD amount that arrived from the API as a string.
+ *
+ * The backend sends six decimal places because a single AI charge really is
+ * worth millionths of a dollar, but "$0.060000" on a screen reads as a bug.
+ * Parsing to a number is safe *for display only* -- the authoritative value
+ * stays the string, and nothing is written back from this.
+ *
+ * Trailing zeros are trimmed but real digits never are. Rounding a $0.015
+ * WhatsApp message to "$0.01" would understate it by a third, and rounding
+ * $0.0004 to "$0.00" would tell a customer a charge was free.
+ */
+export function formatUsd(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const amount = typeof value === "number" ? value : Number.parseFloat(value);
+  if (!Number.isFinite(amount)) return "—";
+
+  const trimmed = amount
+    .toFixed(6)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+  const [whole, fraction = ""] = trimmed.split(".");
+  // Cents are always shown: "$0.1" is not how money is written.
+  return `$${whole}.${fraction.padEnd(2, "0")}`;
+}

@@ -51,6 +51,11 @@ class LeadRead(BaseModel):
     phone_number: str
     email: str | None
     company_name: str | None
+    #: Where the lead came from -- csv, manual, api, or meta:<form id>.
+    #: Shown in the table because "which source converts" is the question
+    #: the pipeline exists to answer.
+    source: str = "manual"
+    source_detail: str | None = None
     status: LeadStatus
     interest_level: InterestLevel
     lead_score: int

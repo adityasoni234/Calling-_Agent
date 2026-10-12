@@ -245,7 +245,7 @@ export function LeadsPage() {
                 headers={[
                   "Name",
                   "Phone",
-                  "Company",
+                  "Source",
                   "Status",
                   "Interest",
                   "Score",
@@ -263,7 +263,19 @@ export function LeadsPage() {
                       {lead.phone_number}
                     </td>
                     <td className="px-3 py-2.5 text-ink-600">
-                      {lead.company_name ?? "—"}
+                      {/* A Meta lead shows which form it came from; the
+                          company name moves under the name, where it is
+                          context rather than a column of mostly dashes. */}
+                      <span className="text-xs">
+                        {lead.source?.startsWith("meta")
+                          ? "Meta ad"
+                          : (lead.source ?? "manual")}
+                      </span>
+                      {lead.company_name && (
+                        <span className="mt-0.5 block text-2xs text-ink-400">
+                          {lead.company_name}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5">
                       <Badge value={lead.status} />

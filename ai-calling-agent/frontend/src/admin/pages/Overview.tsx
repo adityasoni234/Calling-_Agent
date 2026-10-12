@@ -25,7 +25,7 @@ export function Overview() {
       />
 
       {isLoading || !overview ? (
-        <p className="py-16 text-center text-sm text-slate-500">Loading…</p>
+        <p className="py-16 text-center text-sm text-ink-400">Loading…</p>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -105,25 +105,25 @@ export function Overview() {
                 <Grid headers={["Customer", "Balance", "Calls · 30d", ""]}>
                   {lowBalance.map((org) => (
                     <tr key={org.id}>
-                      <td className="py-2.5 pl-4 pr-3 text-slate-200">
+                      <td className="py-2.5 pl-4 pr-3 text-ink-800">
                         {org.name}
                       </td>
                       <td
                         className={`px-3 py-2.5 tabular-nums ${
                           org.credit_balance <= 0
-                            ? "text-red-400"
-                            : "text-amber-400"
+                            ? "text-red-700"
+                            : "text-amber-700"
                         }`}
                       >
                         {org.credit_balance.toFixed(0)}
                       </td>
-                      <td className="px-3 py-2.5 tabular-nums text-slate-400">
+                      <td className="px-3 py-2.5 tabular-nums text-ink-500">
                         {org.calls_30d}
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <Link
                           to="/customers"
-                          className="text-[0.7rem] text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
+                          className="text-[0.7rem] text-ink-500 underline-offset-2 hover:text-ink-800 hover:underline"
                         >
                           Manage
                         </Link>
@@ -152,19 +152,19 @@ export function Overview() {
                 >
                   {busiest.map((org) => (
                     <tr key={org.id}>
-                      <td className="py-2.5 pl-4 pr-3 text-slate-200">
+                      <td className="py-2.5 pl-4 pr-3 text-ink-800">
                         {org.name}
                       </td>
                       <td className="px-3 py-2.5">
                         <Pill value={org.plan} />
                       </td>
-                      <td className="px-3 py-2.5 tabular-nums text-slate-300">
+                      <td className="px-3 py-2.5 tabular-nums text-ink-700">
                         {org.calls_30d}
                       </td>
-                      <td className="px-3 py-2.5 tabular-nums text-slate-400">
+                      <td className="px-3 py-2.5 tabular-nums text-ink-500">
                         ${org.provider_cost_usd.toFixed(2)}
                       </td>
-                      <td className="px-3 py-2.5 text-[0.7rem] text-slate-500">
+                      <td className="px-3 py-2.5 text-[0.7rem] text-ink-400">
                         {org.last_call_at
                           ? formatDateTime(org.last_call_at)
                           : "—"}

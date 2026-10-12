@@ -114,9 +114,9 @@ export function Packages() {
     setDraft((current) => (current ? { ...current, [key]: value } : current));
 
   const input =
-    "w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-[0.8rem] text-slate-100 placeholder:text-slate-600 focus:border-slate-500 focus:outline-none";
+    "w-full rounded-md border border-ink-300/70 bg-ink-50 px-2.5 py-1.5 text-[0.8rem] text-ink-900 placeholder:text-ink-400 focus:border-brand-600 focus:outline-none";
   const label =
-    "block text-[0.65rem] font-medium uppercase tracking-[0.1em] text-slate-500";
+    "block text-[0.65rem] font-medium uppercase tracking-[0.1em] text-ink-400";
 
   // Shown live while editing, so the operator sees the price a customer sees.
   const currency = draft?.currency ?? "USD";
@@ -325,7 +325,7 @@ export function Packages() {
                   }
                 />
               </div>
-              <label className="flex items-end gap-2 pb-2 text-[0.8rem] text-slate-300">
+              <label className="flex items-end gap-2 pb-2 text-[0.8rem] text-ink-700">
                 <input
                   type="checkbox"
                   checked={draft.is_active ?? true}
@@ -333,7 +333,7 @@ export function Packages() {
                 />
                 Active
               </label>
-              <label className="flex items-end gap-2 pb-2 text-[0.8rem] text-slate-300">
+              <label className="flex items-end gap-2 pb-2 text-[0.8rem] text-ink-700">
                 <input
                   type="checkbox"
                   checked={draft.is_public ?? true}
@@ -343,13 +343,13 @@ export function Packages() {
               </label>
             </div>
 
-            <p className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-[0.75rem] text-slate-400">
+            <p className="rounded-md border border-ink-200/60 bg-ink-50 px-3 py-2 text-[0.75rem] text-ink-500">
               Customer pays{" "}
-              <span className="tabular-nums text-slate-100">
+              <span className="tabular-nums text-ink-900">
                 {money(draft.price_minor + previewTax, currency)}
               </span>{" "}
               for{" "}
-              <span className="tabular-nums text-slate-100">
+              <span className="tabular-nums text-ink-900">
                 {(
                   draft.base_credits + (draft.bonus_credits ?? 0)
                 ).toLocaleString()}
@@ -359,7 +359,7 @@ export function Packages() {
             </p>
 
             {error && (
-              <p className="rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-[0.75rem] text-red-300">
+              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[0.75rem] text-red-300">
                 {error}
               </p>
             )}
@@ -407,23 +407,23 @@ export function Packages() {
               ]}
             >
               {rows.map((pkg) => (
-                <tr key={pkg.id} className="text-slate-300">
+                <tr key={pkg.id} className="text-ink-700">
                   <td className="py-2.5 pl-4 pr-3">
-                    <p className="text-slate-100">{pkg.name}</p>
-                    <p className="font-mono text-[0.65rem] text-slate-500">
+                    <p className="text-ink-900">{pkg.name}</p>
+                    <p className="font-mono text-[0.65rem] text-ink-400">
                       {pkg.slug}
                     </p>
                   </td>
                   <td className="whitespace-nowrap px-3 tabular-nums">
                     {money(pkg.payable_minor, pkg.currency)}
-                    <span className="ml-1 text-[0.65rem] text-slate-500">
+                    <span className="ml-1 text-[0.65rem] text-ink-400">
                       incl {pkg.tax_bps / 100}%
                     </span>
                   </td>
                   <td className="px-3 tabular-nums">
                     {pkg.total_credits.toLocaleString()}
                     {pkg.bonus_credits > 0 && (
-                      <span className="ml-1 text-[0.65rem] text-emerald-400">
+                      <span className="ml-1 text-[0.65rem] text-emerald-700">
                         +{pkg.bonus_credits.toLocaleString()}
                       </span>
                     )}

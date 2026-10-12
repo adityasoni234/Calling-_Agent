@@ -57,8 +57,8 @@ export function Messages() {
       onClick={() => set(value)}
       className={`rounded-md px-2 py-1 text-[0.7rem] font-medium transition-colors ${
         active === value
-          ? "bg-slate-100 text-slate-950"
-          : "border border-slate-700 text-slate-400 hover:bg-slate-800"
+          ? "bg-brand-700 text-white"
+          : "border border-ink-300/70 text-ink-500 hover:bg-ink-100"
       }`}
     >
       {value || "All"}
@@ -110,7 +110,7 @@ export function Messages() {
         actions={
           <div className="flex flex-wrap gap-1.5">
             {CHANNELS.map((c) => pill(c, channel, setChannel))}
-            <span className="mx-1 w-px bg-slate-700" />
+            <span className="mx-1 w-px bg-ink-200" />
             {STATUSES.map((s) => pill(s, status, setStatus))}
           </div>
         }
@@ -140,11 +140,11 @@ export function Messages() {
             ]}
           >
             {data.items.map((m) => (
-              <tr key={m.id} className="text-slate-300">
-                <td className="whitespace-nowrap py-2.5 pl-4 pr-3 text-[0.7rem] text-slate-500">
+              <tr key={m.id} className="text-ink-700">
+                <td className="whitespace-nowrap py-2.5 pl-4 pr-3 text-[0.7rem] text-ink-400">
                   {when(m.created_at)}
                 </td>
-                <td className="px-3 text-slate-100">{m.organization}</td>
+                <td className="px-3 text-ink-900">{m.organization}</td>
                 <td className="px-3 font-mono text-[0.7rem]">{m.to_number}</td>
                 <td className="px-3">
                   <Pill value={m.channel} />
@@ -156,12 +156,12 @@ export function Messages() {
                 <td className="px-3 tabular-nums">
                   {money(m.customer_charge_usd)}
                   {m.cost_incomplete && (
-                    <span className="ml-1 text-[0.6rem] text-amber-400">
+                    <span className="ml-1 text-[0.6rem] text-amber-700">
                       cost incomplete
                     </span>
                   )}
                 </td>
-                <td className="max-w-xs truncate px-3 text-[0.7rem] text-slate-500">
+                <td className="max-w-xs truncate px-3 text-[0.7rem] text-ink-400">
                   {m.error_message ?? m.body}
                 </td>
               </tr>

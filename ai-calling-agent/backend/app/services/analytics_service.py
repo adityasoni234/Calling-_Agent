@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.call import Call, CallStatus, CallUsage
 from app.models.campaign import Campaign, CampaignStatus
+from app.models.email import EmailMessage
 from app.models.lead import Lead, LeadStatus
 from app.models.messaging import (
     Conversation,
@@ -158,6 +159,26 @@ class AnalyticsService:
             or 0
         )
 
+        # --- email and lead sources ------------------------------------
+        email_rows = await self.db.execute(
+            select(EmailMessage.status, func.count())
+            .where(EmailMessage.organization_id == organization_id)
+            .group_by(EmailMessage.status)
+        )
+        email_counts = {str(k): int(v) for k, v in email_rows.all()}
+        email_spend = await self.db.scalar(
+            select(func.coalesce(func.sum(EmailMessage.customer_charge_usd), 0)).where(
+                EmailMessage.organization_id == organization_id
+            )
+        )
+
+        source_rows = await self.db.execute(
+            select(Lead.source, func.count())
+            .where(Lead.organization_id == organization_id)
+            .group_by(Lead.source)
+        )
+        by_source = {str(k or "manual"): int(v) for k, v in source_rows.all()}
+
         return {
             "total_calls": total_calls,
             "calls_today": int(calls_today or 0),
@@ -185,6 +206,18 @@ class AnalyticsService:
             "delivery_rate": round(delivered / attempted * 100, 1) if attempted else None,
             "message_cost_usd": float(message_spend or 0),
             "active_message_campaigns": active_message_campaigns,
+            "emails_sent": sum(
+                email_counts.get(k, 0)
+                for k in ("sent", "delivered", "opened", "clicked", "bounced")
+            ),
+            "emails_delivered": email_counts.get("delivered", 0)
+            + email_counts.get("opened", 0)
+            + email_counts.get("clicked", 0),
+            "emails_bounced": email_counts.get("bounced", 0),
+            "email_blocked": email_counts.get("blocked", 0),
+            "email_spend_usd": float(email_spend or 0),
+            "meta_leads": sum(v for k, v in by_source.items() if k.startswith("meta")),
+            "leads_by_source": by_source,
         }
 
     async def calls_per_day(

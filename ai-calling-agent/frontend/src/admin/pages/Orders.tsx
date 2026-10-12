@@ -57,18 +57,18 @@ export function Orders() {
   const refunded = rows.reduce((sum, o) => sum + o.refunded_minor, 0);
 
   const row = (order: AdminOrder, withRetry = false) => (
-    <tr key={order.id} className="text-slate-300">
-      <td className="py-2.5 pl-4 pr-3 font-mono text-[0.7rem] text-slate-400">
+    <tr key={order.id} className="text-ink-700">
+      <td className="py-2.5 pl-4 pr-3 font-mono text-[0.7rem] text-ink-500">
         {order.reference}
       </td>
       <td className="px-3">
-        <p className="text-slate-100">{order.organization_name}</p>
-        <p className="text-[0.65rem] text-slate-500">{order.package_name}</p>
+        <p className="text-ink-900">{order.organization_name}</p>
+        <p className="text-[0.65rem] text-ink-400">{order.package_name}</p>
       </td>
       <td className="whitespace-nowrap px-3 tabular-nums">
         {money(order.total_minor, order.currency)}
         {order.refunded_minor > 0 && (
-          <span className="ml-1 text-[0.65rem] text-violet-400">
+          <span className="ml-1 text-[0.65rem] text-violet-700">
             −{money(order.refunded_minor, order.currency)}
           </span>
         )}
@@ -79,7 +79,7 @@ export function Orders() {
         ) : order.status === "paid" ? (
           // Only alarming once they have paid. An unpaid order has no credits
           // by definition, and colouring that amber cries wolf.
-          <span className="text-amber-400">not allocated</span>
+          <span className="text-amber-700">not allocated</span>
         ) : (
           "—"
         )}
@@ -87,7 +87,7 @@ export function Orders() {
       <td className="px-3">
         <Pill value={order.status} />
       </td>
-      <td className="px-3 text-[0.7rem] text-slate-500">
+      <td className="px-3 text-[0.7rem] text-ink-400">
         {order.provider ?? "—"}
         {order.provider_payment_id && (
           <span className="block font-mono text-[0.65rem]">
@@ -95,7 +95,7 @@ export function Orders() {
           </span>
         )}
       </td>
-      <td className="whitespace-nowrap px-3 text-[0.7rem] text-slate-500">
+      <td className="whitespace-nowrap px-3 text-[0.7rem] text-ink-400">
         {when(order.paid_at ?? order.created_at)}
       </td>
       {withRetry && (
@@ -174,8 +174,8 @@ export function Orders() {
                 onClick={() => setFilter(option.key)}
                 className={`rounded-md px-2 py-1 text-[0.7rem] font-medium transition-colors ${
                   filter === option.key
-                    ? "bg-slate-100 text-slate-950"
-                    : "border border-slate-700 text-slate-400 hover:bg-slate-800"
+                    ? "bg-brand-700 text-white"
+                    : "border border-ink-300/70 text-ink-500 hover:bg-ink-100"
                 }`}
               >
                 {option.label}

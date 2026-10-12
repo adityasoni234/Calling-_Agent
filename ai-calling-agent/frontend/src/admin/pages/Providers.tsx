@@ -160,7 +160,7 @@ export function Providers() {
   };
 
   const input =
-    "w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-[0.75rem] text-slate-100 placeholder:text-slate-600 focus:border-slate-500 focus:outline-none";
+    "w-full rounded-md border border-ink-300/70 bg-ink-50 px-2.5 py-1.5 font-mono text-[0.75rem] text-ink-900 placeholder:text-ink-400 focus:border-brand-600 focus:outline-none";
 
   return (
     <div>
@@ -189,7 +189,7 @@ export function Providers() {
       </div>
 
       {error && (
-        <p className="mb-4 rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-[0.8rem] text-red-300">
+        <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[0.8rem] text-red-300">
           {error}
         </p>
       )}
@@ -243,16 +243,16 @@ export function Providers() {
                 }
               >
                 <div className="space-y-3 px-4 py-3.5 text-[0.8rem]">
-                  <div className="flex flex-wrap gap-x-8 gap-y-2 text-slate-400">
+                  <div className="flex flex-wrap gap-x-8 gap-y-2 text-ink-500">
                     <span>
                       Last checked{" "}
-                      <span className="text-slate-200">
+                      <span className="text-ink-800">
                         {when(provider.last_checked_at)}
                       </span>
                     </span>
                     <span>
                       Keys last changed{" "}
-                      <span className="text-slate-200">
+                      <span className="text-ink-800">
                         {when(provider.secrets_rotated_at)}
                       </span>
                     </span>
@@ -261,7 +261,7 @@ export function Providers() {
                         href={provider.docs_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-slate-400 underline hover:text-slate-200"
+                        className="text-ink-500 underline hover:text-ink-800"
                       >
                         Where to find these
                       </a>
@@ -272,8 +272,8 @@ export function Providers() {
                     <p
                       className={
                         provider.status === "healthy"
-                          ? "text-emerald-400"
-                          : "text-amber-400"
+                          ? "text-emerald-700"
+                          : "text-amber-700"
                       }
                     >
                       {provider.status_detail}
@@ -283,8 +283,8 @@ export function Providers() {
                     <p
                       className={
                         checked[provider.slug].startsWith("OK")
-                          ? "text-emerald-400"
-                          : "text-red-400"
+                          ? "text-emerald-700"
+                          : "text-red-700"
                       }
                     >
                       {checked[provider.slug]}
@@ -292,12 +292,11 @@ export function Providers() {
                   )}
 
                   {configured && !open && (
-                    <div className="flex flex-wrap gap-x-6 gap-y-1 font-mono text-[0.7rem] text-slate-500">
+                    <div className="flex flex-wrap gap-x-6 gap-y-1 font-mono text-[0.7rem] text-ink-400">
                       {Object.entries(provider.secret_hints).map(
                         ([key, hint]) => (
                           <span key={key}>
-                            {key}:{" "}
-                            <span className="text-slate-300">{hint}</span>
+                            {key}: <span className="text-ink-700">{hint}</span>
                           </span>
                         ),
                       )}
@@ -305,16 +304,16 @@ export function Providers() {
                   )}
 
                   {open && (
-                    <div className="space-y-3 border-t border-slate-800 pt-3.5">
+                    <div className="space-y-3 border-t border-ink-200/60 pt-3.5">
                       {SETUP[provider.slug] && (
-                        <div className="rounded-md border border-slate-800 bg-slate-950 px-3.5 py-3">
-                          <p className="text-[0.65rem] font-medium uppercase tracking-[0.1em] text-slate-500">
+                        <div className="rounded-md border border-ink-200/60 bg-ink-50 px-3.5 py-3">
+                          <p className="text-[0.65rem] font-medium uppercase tracking-[0.1em] text-ink-400">
                             Where to get these
                           </p>
-                          <ol className="mt-2 space-y-1.5 text-[0.75rem] leading-relaxed text-slate-300">
+                          <ol className="mt-2 space-y-1.5 text-[0.75rem] leading-relaxed text-ink-700">
                             {SETUP[provider.slug].steps.map((step, index) => (
                               <li key={step} className="flex gap-2.5">
-                                <span className="text-slate-600">
+                                <span className="text-ink-400">
                                   {index + 1}.
                                 </span>
                                 <span>{step}</span>
@@ -323,27 +322,27 @@ export function Providers() {
                           </ol>
                           {CALLBACK[provider.slug] && (
                             <div className="mt-3">
-                              <p className="text-[0.65rem] uppercase tracking-[0.1em] text-slate-500">
+                              <p className="text-[0.65rem] uppercase tracking-[0.1em] text-ink-400">
                                 Redirect URI — paste exactly
                               </p>
-                              <code className="mt-1 block break-all rounded bg-slate-900 px-2 py-1.5 font-mono text-[0.7rem] text-slate-200">
+                              <code className="mt-1 block break-all rounded bg-white px-2 py-1.5 font-mono text-[0.7rem] text-ink-800">
                                 {apiOrigin()}
                                 {CALLBACK[provider.slug]}
                               </code>
-                              <p className="mt-1 text-[0.65rem] text-slate-500">
+                              <p className="mt-1 text-[0.65rem] text-ink-400">
                                 Taken from this console's own API setting, so it
                                 is the URL the provider will actually reach.
                               </p>
                             </div>
                           )}
                           {SETUP[provider.slug].note && (
-                            <p className="mt-3 text-[0.7rem] leading-relaxed text-amber-400/90">
+                            <p className="mt-3 text-[0.7rem] leading-relaxed text-amber-700/90">
                               {SETUP[provider.slug].note}
                             </p>
                           )}
                         </div>
                       )}
-                      <p className="text-[0.75rem] text-slate-500">
+                      <p className="text-[0.75rem] text-ink-400">
                         Leave a field blank to keep the key that is already
                         saved. Nothing you type here can be read back.
                       </p>
@@ -353,12 +352,12 @@ export function Providers() {
                       ].map((field) => (
                         <div key={field}>
                           <label
-                            className="block text-[0.65rem] font-medium uppercase tracking-[0.1em] text-slate-500"
+                            className="block text-[0.65rem] font-medium uppercase tracking-[0.1em] text-ink-400"
                             htmlFor={`${provider.slug}-${field}`}
                           >
                             {field.replace(/_/g, " ")}
                             {provider.required_fields.includes(field) && (
-                              <span className="ml-1 text-red-400">*</span>
+                              <span className="ml-1 text-red-700">*</span>
                             )}
                           </label>
                           <input

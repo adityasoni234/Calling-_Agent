@@ -78,7 +78,7 @@ export function CustomerProfile() {
         actions={
           <Link
             to="/customers"
-            className="whitespace-nowrap rounded-md border border-slate-700 px-2 py-1 text-[0.7rem] font-medium text-slate-300 transition-colors hover:bg-slate-800"
+            className="whitespace-nowrap rounded-md border border-ink-300/70 px-2 py-1 text-[0.7rem] font-medium text-ink-700 transition-colors hover:bg-ink-100"
           >
             All customers
           </Link>
@@ -86,14 +86,14 @@ export function CustomerProfile() {
       />
 
       {org.is_suspended && (
-        <p className="mb-5 rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-[0.8rem] text-red-300">
+        <p className="mb-5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[0.8rem] text-red-300">
           <strong className="font-medium">Suspended.</strong>{" "}
           {org.suspended_reason ?? "No reason recorded."}
         </p>
       )}
 
       {!!p.unallocated_orders.length && (
-        <p className="mb-5 rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-[0.8rem] text-amber-300">
+        <p className="mb-5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[0.8rem] text-amber-300">
           <strong className="font-medium">
             {p.unallocated_orders.length} paid order
             {p.unallocated_orders.length === 1 ? "" : "s"} never allocated
@@ -174,7 +174,7 @@ export function CustomerProfile() {
           {!Object.keys(p.by_source).length ? (
             <Empty title="No calls yet" />
           ) : (
-            <ul className="divide-y divide-slate-800/80">
+            <ul className="divide-y divide-ink-200/60">
               {Object.entries(p.by_source)
                 .sort((a, b) => b[1] - a[1])
                 .map(([source, count]) => (
@@ -182,10 +182,10 @@ export function CustomerProfile() {
                     key={source}
                     className="flex items-center justify-between px-4 py-2.5 text-[0.8rem]"
                   >
-                    <span className="text-slate-300">
+                    <span className="text-ink-700">
                       {SOURCES[source] ?? source}
                     </span>
-                    <span className="tabular-nums text-slate-100">{count}</span>
+                    <span className="tabular-nums text-ink-900">{count}</span>
                   </li>
                 ))}
             </ul>
@@ -201,11 +201,11 @@ export function CustomerProfile() {
           ) : (
             <Grid headers={["Name", "Email", "Role", "Last login"]}>
               {p.users.map((user) => (
-                <tr key={user.id} className="text-slate-300">
-                  <td className="py-2.5 pl-4 pr-3 text-slate-100">
+                <tr key={user.id} className="text-ink-700">
+                  <td className="py-2.5 pl-4 pr-3 text-ink-900">
                     {user.full_name}
                   </td>
-                  <td className="px-3 text-[0.75rem] text-slate-400">
+                  <td className="px-3 text-[0.75rem] text-ink-500">
                     {user.email}
                   </td>
                   <td className="px-3">
@@ -214,7 +214,7 @@ export function CustomerProfile() {
                       {!user.is_active && <Pill value="inactive" />}
                     </div>
                   </td>
-                  <td className="whitespace-nowrap px-3 text-[0.7rem] text-slate-500">
+                  <td className="whitespace-nowrap px-3 text-[0.7rem] text-ink-400">
                     {when(user.last_login_at)}
                   </td>
                 </tr>
@@ -246,21 +246,21 @@ export function CustomerProfile() {
               ]}
             >
               {p.agents.map((agent) => (
-                <tr key={agent.id} className="text-slate-300">
+                <tr key={agent.id} className="text-ink-700">
                   <td className="py-2.5 pl-4 pr-3">
-                    <p className="text-slate-100">{agent.name}</p>
+                    <p className="text-ink-900">{agent.name}</p>
                     {agent.role_title && (
-                      <p className="text-[0.65rem] text-slate-500">
+                      <p className="text-[0.65rem] text-ink-400">
                         {agent.role_title}
                       </p>
                     )}
                   </td>
-                  <td className="px-3 text-[0.75rem] text-slate-400">
+                  <td className="px-3 text-[0.75rem] text-ink-500">
                     {agent.language}
                   </td>
                   <td className="px-3 tabular-nums">{agent.calls}</td>
                   <td className="px-3 tabular-nums">{agent.minutes}</td>
-                  <td className="px-3 tabular-nums text-slate-400">
+                  <td className="px-3 tabular-nums text-ink-500">
                     ${agent.provider_cost_usd.toFixed(2)}
                   </td>
                   <td className="px-3">
@@ -297,7 +297,7 @@ export function CustomerProfile() {
               ]}
             >
               {p.recent_calls.map((call) => (
-                <tr key={call.id} className="text-slate-300">
+                <tr key={call.id} className="text-ink-700">
                   <td className="py-2.5 pl-4 pr-3 font-mono text-[0.75rem]">
                     {call.to_number}
                   </td>
@@ -308,23 +308,23 @@ export function CustomerProfile() {
                     {SOURCES[call.source] ?? call.source}
                     {call.source_detail &&
                       !call.source_detail.startsWith(BACKFILLED) && (
-                        <span className="block text-[0.65rem] text-slate-500">
+                        <span className="block text-[0.65rem] text-ink-400">
                           {call.source_detail}
                         </span>
                       )}
                   </td>
-                  <td className="px-3 text-[0.75rem] text-slate-400">
+                  <td className="px-3 text-[0.75rem] text-ink-500">
                     {call.mode}
                   </td>
                   <td className="px-3 tabular-nums">
                     {call.duration_seconds ? `${call.duration_seconds}s` : "—"}
                   </td>
-                  <td className="px-3 tabular-nums text-slate-400">
+                  <td className="px-3 tabular-nums text-ink-500">
                     {call.cost_usd !== null
                       ? `$${call.cost_usd.toFixed(4)}`
                       : "—"}
                   </td>
-                  <td className="whitespace-nowrap px-3 text-[0.7rem] text-slate-500">
+                  <td className="whitespace-nowrap px-3 text-[0.7rem] text-ink-400">
                     {when(call.created_at)}
                   </td>
                 </tr>
@@ -344,25 +344,25 @@ export function CustomerProfile() {
           ) : (
             <Grid headers={["Type", "Change", "After", "Note", "When"]}>
               {p.recent_credits.map((entry) => (
-                <tr key={entry.id} className="text-slate-300">
+                <tr key={entry.id} className="text-ink-700">
                   <td className="py-2.5 pl-4 pr-3">
                     <Pill value={entry.kind} />
                   </td>
                   <td
                     className={`px-3 tabular-nums ${
-                      entry.amount >= 0 ? "text-emerald-400" : "text-slate-300"
+                      entry.amount >= 0 ? "text-emerald-700" : "text-ink-700"
                     }`}
                   >
                     {entry.amount >= 0 ? "+" : ""}
                     {entry.amount.toFixed(2)}
                   </td>
-                  <td className="px-3 tabular-nums text-slate-400">
+                  <td className="px-3 tabular-nums text-ink-500">
                     {entry.balance_after.toFixed(0)}
                   </td>
-                  <td className="max-w-[12rem] truncate px-3 text-[0.7rem] text-slate-500">
+                  <td className="max-w-[12rem] truncate px-3 text-[0.7rem] text-ink-400">
                     {entry.note ?? "—"}
                   </td>
-                  <td className="whitespace-nowrap px-3 text-[0.7rem] text-slate-500">
+                  <td className="whitespace-nowrap px-3 text-[0.7rem] text-ink-400">
                     {when(entry.created_at)}
                   </td>
                 </tr>
@@ -382,8 +382,8 @@ export function CustomerProfile() {
               headers={["Reference", "Package", "Amount", "Status", "When"]}
             >
               {p.recent_orders.map((order) => (
-                <tr key={order.id} className="text-slate-300">
-                  <td className="py-2.5 pl-4 pr-3 font-mono text-[0.7rem] text-slate-400">
+                <tr key={order.id} className="text-ink-700">
+                  <td className="py-2.5 pl-4 pr-3 font-mono text-[0.7rem] text-ink-500">
                     {order.reference}
                   </td>
                   <td className="px-3">{order.package_name}</td>
@@ -399,7 +399,7 @@ export function CustomerProfile() {
                         )}
                     </div>
                   </td>
-                  <td className="whitespace-nowrap px-3 text-[0.7rem] text-slate-500">
+                  <td className="whitespace-nowrap px-3 text-[0.7rem] text-ink-400">
                     {when(order.paid_at ?? order.created_at)}
                   </td>
                 </tr>

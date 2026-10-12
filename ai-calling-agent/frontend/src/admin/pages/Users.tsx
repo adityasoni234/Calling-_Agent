@@ -31,20 +31,20 @@ export function Users() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search name, email, customer"
-            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-slate-500"
+            className="rounded-lg border border-ink-300/70 bg-white px-3 py-1.5 text-xs text-ink-800 outline-none focus:border-brand-600"
           />
         }
       />
 
       {note && (
-        <p className="mb-4 rounded-lg border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">
+        <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-300">
           {note}
         </p>
       )}
 
       <Panel>
         {isLoading ? (
-          <p className="py-16 text-center text-sm text-slate-500">Loading…</p>
+          <p className="py-16 text-center text-sm text-ink-400">Loading…</p>
         ) : rows.length === 0 ? (
           <Empty title="No users match" />
         ) : (
@@ -52,14 +52,14 @@ export function Users() {
             headers={["User", "Customer", "Role", "Last sign-in", "Status", ""]}
           >
             {rows.map((user) => (
-              <tr key={user.id} className="hover:bg-slate-800/40">
+              <tr key={user.id} className="hover:bg-ink-50">
                 <td className="py-3 pl-4 pr-3">
-                  <p className="font-medium text-slate-100">{user.full_name}</p>
-                  <p className="mt-0.5 text-[0.7rem] text-slate-500">
+                  <p className="font-medium text-ink-900">{user.full_name}</p>
+                  <p className="mt-0.5 text-[0.7rem] text-ink-400">
                     {user.email}
                   </p>
                 </td>
-                <td className="px-3 py-3 text-slate-300">
+                <td className="px-3 py-3 text-ink-700">
                   {user.organization_name}
                 </td>
                 <td className="px-3 py-3">
@@ -68,7 +68,7 @@ export function Users() {
                     {user.is_platform_admin && <Pill value="platform admin" />}
                   </div>
                 </td>
-                <td className="px-3 py-3 text-[0.7rem] text-slate-500">
+                <td className="px-3 py-3 text-[0.7rem] text-ink-400">
                   {user.last_login_at
                     ? formatDateTime(user.last_login_at)
                     : "never"}

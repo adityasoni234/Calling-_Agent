@@ -35,6 +35,17 @@ class Overview(BaseModel):
     message_cost_usd: float = 0.0
     active_message_campaigns: int = 0
 
+    # Email and lead sources. A channel that is live but absent from the
+    # dashboard is a channel customers assume is broken.
+    emails_sent: int = 0
+    emails_delivered: int = 0
+    emails_bounced: int = 0
+    email_spend_usd: float = 0.0
+    email_blocked: int = 0
+    #: Leads arriving from connected Meta lead forms.
+    meta_leads: int = 0
+    leads_by_source: dict[str, int] = {}
+
 
 class TimeSeriesPoint(BaseModel):
     date: str

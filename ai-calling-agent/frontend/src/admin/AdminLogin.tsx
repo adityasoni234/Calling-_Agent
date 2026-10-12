@@ -40,21 +40,21 @@ export function AdminLogin() {
   };
 
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-950 px-4 py-10">
+    <div className="grid min-h-screen place-items-center bg-ink-50 px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8">
           <div className="flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-100 text-xs font-bold text-slate-950">
+            <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-700 text-xs font-bold text-white">
               SV
             </span>
             <div className="leading-tight">
-              <p className="text-sm font-semibold text-slate-100">Stockvala</p>
-              <p className="text-[0.7rem] uppercase tracking-[0.14em] text-slate-500">
+              <p className="text-sm font-semibold text-ink-900">Stockvala</p>
+              <p className="text-[0.7rem] uppercase tracking-[0.14em] text-ink-400">
                 Platform administration
               </p>
             </div>
           </div>
-          <p className="mt-5 text-sm leading-relaxed text-slate-400">
+          <p className="mt-5 text-sm leading-relaxed text-ink-500">
             Internal tool. Signing in here gives you access to every customer
             account on the platform.
           </p>
@@ -62,29 +62,29 @@ export function AdminLogin() {
 
         <form
           onSubmit={submit}
-          className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/70 p-6"
+          className="space-y-4 rounded-xl border border-ink-200/60 bg-white/70 p-6"
           noValidate
         >
           {error && (
-            <p className="rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-300">
               {error}
             </p>
           )}
 
           <label className="block">
-            <span className="text-xs font-medium text-slate-400">Email</span>
+            <span className="text-xs font-medium text-ink-500">Email</span>
             <input
               type="email"
               autoComplete="username"
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none transition-colors focus:border-slate-500"
+              className="mt-1.5 w-full rounded-lg border border-ink-300/70 bg-ink-50 px-3 py-2.5 text-sm text-ink-900 outline-none transition-colors focus:border-brand-600"
             />
           </label>
 
           <label className="block">
-            <span className="text-xs font-medium text-slate-400">Password</span>
+            <span className="text-xs font-medium text-ink-500">Password</span>
             <div className="relative mt-1.5">
               <input
                 type={revealed ? "text" : "password"}
@@ -92,12 +92,12 @@ export function AdminLogin() {
                 required
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 pr-16 text-sm text-slate-100 outline-none transition-colors focus:border-slate-500"
+                className="w-full rounded-lg border border-ink-300/70 bg-ink-50 px-3 py-2.5 pr-16 text-sm text-ink-900 outline-none transition-colors focus:border-brand-600"
               />
               <button
                 type="button"
                 onClick={() => setRevealed((shown) => !shown)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-[0.7rem] font-medium text-slate-500 transition-colors hover:text-slate-300"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-[0.7rem] font-medium text-ink-400 transition-colors hover:text-ink-700"
               >
                 {revealed ? "Hide" : "Show"}
               </button>
@@ -107,13 +107,13 @@ export function AdminLogin() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-white disabled:opacity-60"
+            className="w-full rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-ink-50 disabled:opacity-60"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-[0.7rem] leading-relaxed text-slate-600">
+        <p className="mt-6 text-center text-[0.7rem] leading-relaxed text-ink-400">
           Not a customer login. Customers sign in at the main dashboard.
         </p>
       </div>

@@ -99,19 +99,17 @@ export function AdminShell() {
   // A customer who reaches this build gets nothing and a way out.
   if (user && !user.is_platform_admin) {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-950 px-4 text-center">
+      <div className="grid min-h-screen place-items-center bg-ink-50 px-4 text-center">
         <div className="max-w-sm">
-          <h1 className="text-lg font-semibold text-slate-100">
-            Not available
-          </h1>
-          <p className="mt-2 text-sm leading-relaxed text-slate-400">
+          <h1 className="text-lg font-semibold text-ink-900">Not available</h1>
+          <p className="mt-2 text-sm leading-relaxed text-ink-500">
             This account does not have platform access. Customers use the main
             dashboard.
           </p>
           <button
             type="button"
             onClick={signOut}
-            className="mt-5 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-950"
+            className="mt-5 rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white"
           >
             Sign out
           </button>
@@ -121,15 +119,15 @@ export function AdminShell() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
-      <aside className="fixed inset-y-0 left-0 hidden w-56 flex-col border-r border-slate-800 bg-slate-900 lg:flex">
-        <div className="flex h-14 items-center gap-2.5 border-b border-slate-800 px-4">
-          <span className="grid h-7 w-7 place-items-center rounded-md bg-slate-100 text-[0.65rem] font-bold text-slate-950">
+    <div className="min-h-screen bg-ink-50 text-ink-800">
+      <aside className="fixed inset-y-0 left-0 hidden w-56 flex-col border-r border-ink-200/60 bg-white lg:flex">
+        <div className="flex h-14 items-center gap-2.5 border-b border-ink-200/60 px-4">
+          <span className="grid h-7 w-7 place-items-center rounded-md bg-brand-700 text-[0.65rem] font-bold text-white">
             SV
           </span>
           <div className="leading-tight">
-            <p className="text-xs font-semibold text-slate-100">Platform</p>
-            <p className="text-[0.65rem] text-slate-500">Stockvala</p>
+            <p className="text-xs font-semibold text-ink-900">Platform</p>
+            <p className="text-[0.65rem] text-ink-400">Stockvala</p>
           </div>
         </div>
 
@@ -142,8 +140,8 @@ export function AdminShell() {
               className={({ isActive }) =>
                 `flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.8rem] transition-colors ${
                   isActive
-                    ? "bg-slate-800 font-medium text-slate-100"
-                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                    ? "bg-ink-100 font-medium text-ink-900"
+                    : "text-ink-500 hover:bg-ink-100/60 hover:text-ink-800"
                 }`
               }
             >
@@ -153,8 +151,8 @@ export function AdminShell() {
           ))}
         </nav>
 
-        <div className="border-t border-slate-800 p-3">
-          <p className="flex items-center gap-1.5 text-[0.65rem] text-slate-500">
+        <div className="border-t border-ink-200/60 p-3">
+          <p className="flex items-center gap-1.5 text-[0.65rem] text-ink-400">
             <span
               className={`h-1.5 w-1.5 rounded-full ${
                 health?.status === "ok" ? "bg-emerald-500" : "bg-amber-500"
@@ -167,21 +165,36 @@ export function AdminShell() {
       </aside>
 
       <div className="lg:pl-56">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-800 bg-slate-950/90 px-5 backdrop-blur lg:px-8">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-ink-200/60 bg-ink-50/90 px-5 backdrop-blur lg:px-8">
           {/* You are acting on every customer. Say so, permanently. */}
-          <span className="rounded-md border border-amber-900/50 bg-amber-950/40 px-2 py-1 text-[0.65rem] font-medium uppercase tracking-wider text-amber-400">
-            All customer data
+          <span
+            className="shrink-0 whitespace-nowrap rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[0.65rem] font-medium uppercase tracking-wider text-amber-700"
+            title="You are viewing data belonging to every customer"
+          >
+            {/* The warning has to survive a phone. Spelled out where there
+                is room, abbreviated where there is not -- wrapping onto
+                three lines ate the whole header. */}
+            <span className="sm:hidden">All data</span>
+            <span className="hidden sm:inline">All customer data</span>
           </span>
 
-          <nav className="ml-auto flex gap-1 lg:hidden">
+          <nav
+            className="-mx-1 flex gap-1 overflow-x-auto px-1 lg:hidden"
+            // Nine sections cannot sit side by side on a phone. A scrollable
+            // rail keeps every label readable instead of shrinking them all
+            // until none of them are.
+            style={{ scrollbarWidth: "none" }}
+          >
             {SECTIONS.map((section) => (
               <NavLink
                 key={section.to}
                 to={section.to}
                 end={section.end}
                 className={({ isActive }) =>
-                  `rounded-md px-2 py-1 text-[0.7rem] ${
-                    isActive ? "bg-slate-800 text-slate-100" : "text-slate-500"
+                  `shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    isActive
+                      ? "bg-brand-700 text-white"
+                      : "text-ink-500 hover:bg-ink-100"
                   }`
                 }
               >
@@ -194,27 +207,25 @@ export function AdminShell() {
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
-              className="flex items-center gap-2 rounded-lg py-1 pl-1 pr-2.5 text-sm text-slate-300 transition-colors hover:bg-slate-800"
+              className="flex items-center gap-2 rounded-lg py-1 pl-1 pr-2.5 text-sm text-ink-700 transition-colors hover:bg-ink-100"
             >
-              <span className="grid h-7 w-7 place-items-center rounded-md bg-slate-700 text-[0.65rem] font-semibold text-slate-100">
+              <span className="grid h-7 w-7 place-items-center rounded-md bg-ink-200 text-[0.65rem] font-semibold text-ink-900">
                 {initials(user?.full_name ?? "?")}
               </span>
               <span className="hidden text-xs sm:inline">{user?.email}</span>
             </button>
             {menuOpen && (
-              <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
-                <div className="border-b border-slate-800 px-3 py-2.5">
-                  <p className="truncate text-xs text-slate-200">
-                    {user?.email}
-                  </p>
-                  <p className="mt-0.5 text-[0.65rem] text-slate-500">
+              <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-lg border border-ink-200/60 bg-white">
+                <div className="border-b border-ink-200/60 px-3 py-2.5">
+                  <p className="truncate text-xs text-ink-800">{user?.email}</p>
+                  <p className="mt-0.5 text-[0.65rem] text-ink-400">
                     Platform administrator
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={signOut}
-                  className="w-full px-3 py-2 text-left text-xs text-slate-300 transition-colors hover:bg-slate-800"
+                  className="w-full px-3 py-2 text-left text-xs text-ink-700 transition-colors hover:bg-ink-100"
                 >
                   Sign out
                 </button>
@@ -223,7 +234,7 @@ export function AdminShell() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-[1400px] p-5 lg:px-8 lg:py-7">
+        <main className="mx-auto max-w-[1400px] px-4 py-5 sm:px-5 lg:px-8 lg:py-7">
           <Outlet />
         </main>
       </div>

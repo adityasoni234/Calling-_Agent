@@ -19,15 +19,15 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+    <section className="overflow-hidden rounded-xl border border-ink-200/60 bg-white">
       {(title || actions) && (
-        <header className="flex items-start justify-between gap-4 border-b border-slate-800 px-4 py-3">
+        <header className="flex items-start justify-between gap-4 border-b border-ink-200/60 px-4 py-3">
           <div className="min-w-0">
             {title && (
-              <h2 className="text-sm font-medium text-slate-100">{title}</h2>
+              <h2 className="text-sm font-medium text-ink-900">{title}</h2>
             )}
             {description && (
-              <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+              <p className="mt-0.5 text-xs leading-relaxed text-ink-400">
                 {description}
               </p>
             )}
@@ -53,13 +53,13 @@ export function Metric({
 }) {
   const colour =
     tone === "good"
-      ? "text-emerald-400"
+      ? "text-emerald-700"
       : tone === "bad"
-        ? "text-red-400"
-        : "text-slate-100";
+        ? "text-red-700"
+        : "text-ink-900";
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-3.5">
-      <p className="text-[0.65rem] font-medium uppercase tracking-[0.1em] text-slate-500">
+    <div className="rounded-xl border border-ink-200/60 bg-white px-4 py-3.5">
+      <p className="text-[0.65rem] font-medium uppercase tracking-[0.1em] text-ink-400">
         {label}
       </p>
       <p
@@ -67,7 +67,7 @@ export function Metric({
       >
         {value}
       </p>
-      {sub && <p className="mt-1.5 text-[0.7rem] text-slate-500">{sub}</p>}
+      {sub && <p className="mt-1.5 text-[0.7rem] text-ink-400">{sub}</p>}
     </div>
   );
 }
@@ -83,11 +83,11 @@ export function Grid({
     <div className="overflow-x-auto">
       <table className="min-w-full text-[0.8rem]">
         <thead>
-          <tr className="border-b border-slate-800 text-left">
+          <tr className="border-b border-ink-200/60 text-left">
             {headers.map((header, index) => (
               <th
                 key={header || index}
-                className={`whitespace-nowrap py-2.5 text-[0.65rem] font-medium uppercase tracking-[0.1em] text-slate-500 ${
+                className={`whitespace-nowrap py-2.5 text-[0.65rem] font-medium uppercase tracking-[0.1em] text-ink-400 ${
                   index === 0 ? "pl-4 pr-3" : "px-3"
                 }`}
               >
@@ -96,28 +96,28 @@ export function Grid({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-800/80">{children}</tbody>
+        <tbody className="divide-y divide-ink-200/60">{children}</tbody>
       </table>
     </div>
   );
 }
 
 const PILL: Record<string, string> = {
-  active: "border-emerald-900/60 bg-emerald-950/50 text-emerald-400",
-  suspended: "border-red-900/60 bg-red-950/50 text-red-400",
-  inactive: "border-slate-700 bg-slate-800 text-slate-400",
-  trial: "border-slate-700 bg-slate-800 text-slate-300",
-  starter: "border-sky-900/60 bg-sky-950/50 text-sky-400",
-  growth: "border-violet-900/60 bg-violet-950/50 text-violet-400",
-  scale: "border-amber-900/60 bg-amber-950/50 text-amber-400",
-  grant: "border-emerald-900/60 bg-emerald-950/50 text-emerald-400",
-  purchase: "border-emerald-900/60 bg-emerald-950/50 text-emerald-400",
-  usage: "border-slate-700 bg-slate-800 text-slate-400",
-  adjustment: "border-amber-900/60 bg-amber-950/50 text-amber-400",
+  active: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  suspended: "border-red-200 bg-red-50 text-red-700",
+  inactive: "border-ink-300/70 bg-ink-100 text-ink-500",
+  trial: "border-ink-300/70 bg-ink-100 text-ink-700",
+  starter: "border-sky-200 bg-sky-50 text-sky-700",
+  growth: "border-violet-200 bg-violet-50 text-violet-700",
+  scale: "border-amber-200 bg-amber-50 text-amber-700",
+  grant: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  purchase: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  usage: "border-ink-300/70 bg-ink-100 text-ink-500",
+  adjustment: "border-amber-200 bg-amber-50 text-amber-700",
 };
 
 export function Pill({ value }: { value: string }) {
-  const tone = PILL[value] ?? "border-slate-700 bg-slate-800 text-slate-300";
+  const tone = PILL[value] ?? "border-ink-300/70 bg-ink-100 text-ink-700";
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded border px-1.5 py-0.5 text-[0.65rem] font-medium ${tone}`}
@@ -140,10 +140,10 @@ export function Action({
 }) {
   const style =
     tone === "primary"
-      ? "bg-slate-100 text-slate-950 hover:bg-white"
+      ? "bg-brand-700 text-white hover:bg-ink-50"
       : tone === "danger"
-        ? "border border-red-900/60 text-red-400 hover:bg-red-950/40"
-        : "border border-slate-700 text-slate-300 hover:bg-slate-800";
+        ? "border border-red-200 text-red-700 hover:bg-red-50"
+        : "border border-ink-300/70 text-ink-700 hover:bg-ink-100";
   return (
     <button
       type="button"
@@ -159,9 +159,9 @@ export function Action({
 export function Empty({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="px-4 py-12 text-center">
-      <p className="text-sm text-slate-300">{title}</p>
+      <p className="text-sm text-ink-700">{title}</p>
       {hint && (
-        <p className="mx-auto mt-1.5 max-w-sm text-xs text-slate-500">{hint}</p>
+        <p className="mx-auto mt-1.5 max-w-sm text-xs text-ink-400">{hint}</p>
       )}
     </div>
   );
@@ -177,11 +177,11 @@ export function PageTitle({
   actions?: ReactNode;
 }) {
   return (
-    <header className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-slate-800 pb-4">
+    <header className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-ink-200/60 pb-4">
       <div>
-        <h1 className="text-lg font-semibold text-slate-100">{title}</h1>
+        <h1 className="text-lg font-semibold text-ink-900">{title}</h1>
         {description && (
-          <p className="mt-1 text-xs text-slate-500">{description}</p>
+          <p className="mt-1 text-xs text-ink-400">{description}</p>
         )}
       </div>
       {actions}

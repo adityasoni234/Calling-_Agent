@@ -173,6 +173,42 @@ export function DashboardPage() {
         />
       </div>
 
+      {/* Email and lead sources. A live channel absent from the dashboard
+          is a channel customers assume is broken. */}
+      <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Emails sent"
+          value={String(overview?.emails_sent ?? 0)}
+          hint={
+            overview?.email_blocked
+              ? `${overview.email_blocked} held back as invalid or blocked`
+              : "Validated before sending"
+          }
+          pending={isLoading}
+        />
+        <StatCard
+          label="Emails delivered"
+          value={String(overview?.emails_delivered ?? 0)}
+          hint={
+            overview?.emails_bounced
+              ? `${overview.emails_bounced} bounced and now blocked`
+              : "No bounces"
+          }
+          pending={isLoading}
+        />
+        <StatCard
+          label="Email spend"
+          value={formatCurrency(overview?.email_spend_usd ?? 0)}
+          pending={isLoading}
+        />
+        <StatCard
+          label="Leads from Meta"
+          value={String(overview?.meta_leads ?? 0)}
+          hint={`${overview?.total_leads ?? 0} leads in total`}
+          pending={isLoading}
+        />
+      </div>
+
       <MessagingReadinessNotice />
 
       <section className="relative animate-fade-up overflow-hidden rounded-2xl bg-brand-sheen p-6 shadow-glow sm:p-7">

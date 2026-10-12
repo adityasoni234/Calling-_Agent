@@ -589,7 +589,7 @@ async def mailbox_callback(
     """
     _prune_states()
     if error:
-        return _oauth_page("Could not connect", error)
+        return _oauth_page("Could not connect", _oauth_error(error))
     if not code or not state or state not in _MAILBOX_STATES:
         return _oauth_page(
             "Could not connect",
@@ -643,6 +643,38 @@ async def mailbox_callback(
         f"Emails will be sent from {grant.address}. Close this window and "
         "return to the Email page.",
     )
+
+
+#: The provider's error codes, in words that name the fix. Shown as-is they
+#: are useless -- "access_denied" is the same string whether the user
+#: pressed Cancel or the app has not whitelisted them, and those need
+#: completely different actions.
+_OAUTH_ERRORS = {
+    "access_denied": (
+        "Google refused access. Either you pressed Cancel, or this Google "
+        "account is not on the app's Test users list. While an app is in "
+        "Testing, only accounts added under Google Auth Platform → Audience "
+        "→ Test users can connect. Add the address there and try again."
+    ),
+    "admin_policy_enforced": (
+        "Your Google Workspace administrator blocks this app. They need to "
+        "allow it in the Workspace admin console."
+    ),
+    "org_internal": (
+        "This app is restricted to one Google Workspace organisation, and "
+        "the account you chose is outside it."
+    ),
+    "redirect_uri_mismatch": (
+        "The callback address does not match what is registered with Google. "
+        "It must match exactly, including http or https and the port."
+    ),
+    "invalid_client": ("The client ID or secret is wrong. Check both in provider settings."),
+    "consent_required": "Google needs the permissions to be approved again.",
+}
+
+
+def _oauth_error(code: str) -> str:
+    return _OAUTH_ERRORS.get(code, f"The provider returned: {code}")
 
 
 def _oauth_page(title: str, body: str) -> HTMLResponse:

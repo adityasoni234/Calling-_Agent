@@ -111,7 +111,7 @@ export function Pricing() {
       </div>
 
       {error && (
-        <p className="mb-4 rounded-md border border-red-900/60 bg-red-950/40 px-3 py-2 text-[0.8rem] text-red-300">
+        <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[0.8rem] text-red-300">
           {error}
         </p>
       )}
@@ -147,7 +147,7 @@ export function Pricing() {
               }
             >
               {book.below_cost_reason && (
-                <p className="border-b border-slate-800 px-4 py-2 text-[0.75rem] text-amber-400">
+                <p className="border-b border-ink-200/60 px-4 py-2 text-[0.75rem] text-amber-700">
                   Published below cost: {book.below_cost_reason}
                 </p>
               )}
@@ -173,18 +173,16 @@ export function Pricing() {
                     );
                     const key = `${book.id}:${rule.id}`;
                     return (
-                      <tr key={rule.id} className="text-slate-300">
+                      <tr key={rule.id} className="text-ink-700">
                         <td className="py-2.5 pl-4 pr-3">
-                          <p className="text-slate-100">
-                            {label(rule.billable)}
-                          </p>
+                          <p className="text-ink-900">{label(rule.billable)}</p>
                           {rule.notes && (
-                            <p className="mt-0.5 max-w-md text-[0.65rem] text-slate-500">
+                            <p className="mt-0.5 max-w-md text-[0.65rem] text-ink-400">
                               {rule.notes}
                             </p>
                           )}
                         </td>
-                        <td className="px-3 text-[0.7rem] text-slate-400">
+                        <td className="px-3 text-[0.7rem] text-ink-500">
                           {rule.rate_kind.replace(/_/g, " ")}
                         </td>
                         <td className="px-3 tabular-nums">
@@ -211,7 +209,7 @@ export function Pricing() {
                                 }
                                 setEditing(null);
                               }}
-                              className="w-24 rounded border border-slate-600 bg-slate-950 px-1.5 py-0.5 text-slate-100"
+                              className="w-24 rounded border border-ink-300 bg-ink-50 px-1.5 py-0.5 text-ink-900"
                             />
                           ) : (
                             <button
@@ -221,7 +219,7 @@ export function Pricing() {
                                 setEditing(key);
                                 setValue(rule.rate);
                               }}
-                              className="tabular-nums hover:text-slate-100 disabled:cursor-not-allowed"
+                              className="tabular-nums hover:text-ink-900 disabled:cursor-not-allowed"
                               title={
                                 book.status === "published"
                                   ? "Published books are immutable"
@@ -232,7 +230,7 @@ export function Pricing() {
                             </button>
                           )}
                         </td>
-                        <td className="px-3 tabular-nums text-slate-500">
+                        <td className="px-3 tabular-nums text-ink-400">
                           {rule.assumed_cost
                             ? `$${Number.parseFloat(rule.assumed_cost).toFixed(4)}`
                             : "—"}
@@ -240,12 +238,12 @@ export function Pricing() {
                         <td
                           className={`px-3 tabular-nums ${
                             margin === null
-                              ? "text-slate-500"
+                              ? "text-ink-400"
                               : margin < 0
-                                ? "text-red-400"
+                                ? "text-red-700"
                                 : margin < 30
-                                  ? "text-amber-400"
-                                  : "text-emerald-400"
+                                  ? "text-amber-700"
+                                  : "text-emerald-700"
                           }`}
                         >
                           {margin !== null
@@ -256,7 +254,7 @@ export function Pricing() {
                                 "by design"
                               : "unknown"}
                         </td>
-                        <td className="px-3 tabular-nums text-slate-500">
+                        <td className="px-3 tabular-nums text-ink-400">
                           {rule.minimum_charge
                             ? `$${Number.parseFloat(rule.minimum_charge).toFixed(2)}`
                             : "—"}

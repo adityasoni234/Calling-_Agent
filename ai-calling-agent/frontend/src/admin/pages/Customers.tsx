@@ -51,20 +51,20 @@ export function Customers() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search customers"
-            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-slate-500"
+            className="rounded-lg border border-ink-300/70 bg-white px-3 py-1.5 text-xs text-ink-800 outline-none focus:border-brand-600"
           />
         }
       />
 
       {note && (
-        <p className="mb-4 rounded-lg border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">
+        <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-300">
           {note}
         </p>
       )}
 
       <Panel>
         {isLoading ? (
-          <p className="py-16 text-center text-sm text-slate-500">Loading…</p>
+          <p className="py-16 text-center text-sm text-ink-400">Loading…</p>
         ) : rows.length === 0 ? (
           <Empty title="No customers match" />
         ) : (
@@ -87,10 +87,10 @@ export function Customers() {
               const billed = org.credits_used_30d / 100;
               const margin = billed - org.provider_cost_usd;
               return (
-                <tr key={org.id} className="hover:bg-slate-800/40">
+                <tr key={org.id} className="hover:bg-ink-50">
                   <td className="py-3 pl-4 pr-3">
-                    <p className="font-medium text-slate-100">{org.name}</p>
-                    <p className="mt-0.5 text-[0.7rem] text-slate-500">
+                    <p className="font-medium text-ink-900">{org.name}</p>
+                    <p className="mt-0.5 text-[0.7rem] text-ink-400">
                       {org.users} user{org.users === 1 ? "" : "s"} ·{" "}
                       {org.last_call_at
                         ? `last call ${formatDateTime(org.last_call_at)}`
@@ -104,30 +104,30 @@ export function Customers() {
                     <span
                       className={`font-medium tabular-nums ${
                         org.credit_balance <= 0
-                          ? "text-red-400"
+                          ? "text-red-700"
                           : org.credit_balance < 500
-                            ? "text-amber-400"
-                            : "text-slate-100"
+                            ? "text-amber-700"
+                            : "text-ink-900"
                       }`}
                     >
                       {org.credit_balance.toFixed(0)}
                     </span>
-                    <span className="ml-1.5 text-[0.7rem] text-slate-500">
+                    <span className="ml-1.5 text-[0.7rem] text-ink-400">
                       {money(org.credit_balance)}
                     </span>
                   </td>
-                  <td className="px-3 py-3 tabular-nums text-slate-300">
+                  <td className="px-3 py-3 tabular-nums text-ink-700">
                     {org.calls_30d}
-                    <span className="ml-1.5 text-[0.7rem] text-slate-500">
+                    <span className="ml-1.5 text-[0.7rem] text-ink-400">
                       {org.minutes_30d}m
                     </span>
                   </td>
-                  <td className="px-3 py-3 tabular-nums text-slate-400">
+                  <td className="px-3 py-3 tabular-nums text-ink-500">
                     ${org.provider_cost_usd.toFixed(2)}
                   </td>
                   <td
                     className={`px-3 py-3 tabular-nums ${
-                      margin >= 0 ? "text-emerald-400" : "text-red-400"
+                      margin >= 0 ? "text-emerald-700" : "text-red-700"
                     }`}
                   >
                     ${margin.toFixed(2)}
@@ -180,7 +180,7 @@ export function Customers() {
                       </Action>
                       <Link
                         to={`/customers/${org.id}`}
-                        className="whitespace-nowrap rounded-md border border-slate-700 px-2 py-1 text-[0.7rem] font-medium text-slate-300 transition-colors hover:bg-slate-800"
+                        className="whitespace-nowrap rounded-md border border-ink-300/70 px-2 py-1 text-[0.7rem] font-medium text-ink-700 transition-colors hover:bg-ink-100"
                       >
                         Open
                       </Link>
@@ -248,7 +248,7 @@ function Statement({
           <Grid headers={["When", "Type", "Amount", "Balance after", "Note"]}>
             {entries.map((entry) => (
               <tr key={entry.id}>
-                <td className="whitespace-nowrap py-2.5 pl-4 pr-3 text-[0.7rem] text-slate-500">
+                <td className="whitespace-nowrap py-2.5 pl-4 pr-3 text-[0.7rem] text-ink-400">
                   {formatDateTime(entry.created_at)}
                 </td>
                 <td className="px-3 py-2.5">
@@ -256,19 +256,19 @@ function Statement({
                 </td>
                 <td
                   className={`px-3 py-2.5 tabular-nums ${
-                    entry.amount < 0 ? "text-slate-400" : "text-emerald-400"
+                    entry.amount < 0 ? "text-ink-500" : "text-emerald-700"
                   }`}
                 >
                   {entry.amount > 0 ? "+" : ""}
                   {entry.amount.toFixed(2)}
                 </td>
-                <td className="px-3 py-2.5 tabular-nums text-slate-200">
+                <td className="px-3 py-2.5 tabular-nums text-ink-800">
                   {entry.balance_after.toFixed(0)}
                 </td>
-                <td className="px-3 py-2.5 text-[0.7rem] text-slate-500">
+                <td className="px-3 py-2.5 text-[0.7rem] text-ink-400">
                   {entry.note ?? "—"}
                   {entry.provider_cost_usd != null && (
-                    <span className="ml-1.5 text-slate-600">
+                    <span className="ml-1.5 text-ink-400">
                       (cost ${entry.provider_cost_usd.toFixed(4)})
                     </span>
                   )}

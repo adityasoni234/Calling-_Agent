@@ -150,6 +150,9 @@ export interface Lead {
   phone_number: string;
   email: string | null;
   company_name: string | null;
+  /** csv, manual, api, or meta:<form id>. */
+  source: string;
+  source_detail: string | null;
   status: LeadStatus;
   interest_level: InterestLevel;
   lead_score: number;
@@ -349,6 +352,13 @@ export interface Overview {
   delivery_rate: number | null;
   message_cost_usd: number;
   active_message_campaigns: number;
+  emails_sent: number;
+  emails_delivered: number;
+  emails_bounced: number;
+  email_spend_usd: number;
+  email_blocked: number;
+  meta_leads: number;
+  leads_by_source: Record<string, number>;
 }
 
 export interface AnalyticsBundle {

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.models.activity import ActorType, EntityType
 
 
 class ProviderStatus(BaseModel):
@@ -64,3 +67,21 @@ class PricingRateCreate(BaseModel):
 class PricingRateRead(PricingRateCreate):
     id: str
     is_active: bool
+
+
+class ActivityEventRead(BaseModel):
+    """One thing that happened in this account, as the customer sees it."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    #: `platform_admin` is the one that matters here: it is how a customer
+    #: finds out that Stockvala staff opened their account.
+    actor_type: ActorType
+    actor_label: str | None
+    action: str
+    entity_type: EntityType
+    entity_label: str | None
+    summary: str | None
+    reason: str | None
+    created_at: datetime

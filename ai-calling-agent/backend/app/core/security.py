@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Any
@@ -22,6 +23,15 @@ from app.core.errors import AuthenticationError
 
 ACCESS_TOKEN_TYPE = "access"
 BCRYPT_MAX_BYTES = 72
+
+
+@dataclass(frozen=True)
+class ImpersonationClaim:
+    """Who is really behind a token issued in someone else's name."""
+
+    session_id: uuid.UUID
+    admin_user_id: uuid.UUID
+    admin_email: str
 
 
 def hash_password(password: str) -> str:
@@ -63,6 +73,7 @@ def create_access_token(
     organization_id: uuid.UUID,
     role: str,
     expires_delta: timedelta | None = None,
+    impersonation: ImpersonationClaim | None = None,
 ) -> tuple[str, datetime]:
     now = datetime.now(UTC)
     expires_at = now + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
@@ -75,6 +86,14 @@ def create_access_token(
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
+    if impersonation is not None:
+        # `sub` stays the customer, because everything downstream scopes by it
+        # and a token that lies about the organization would read the wrong
+        # account's data. `act` is who is really holding the keyboard, and it
+        # is what the audit trail and the banner both key off.
+        payload["imp"] = str(impersonation.session_id)
+        payload["act"] = str(impersonation.admin_user_id)
+        payload["act_email"] = impersonation.admin_email
     token = jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
     return token, expires_at
 

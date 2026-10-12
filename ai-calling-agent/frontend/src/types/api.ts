@@ -1133,3 +1133,61 @@ export interface MailboxList {
   available: { gmail: boolean; outlook: boolean };
   limits: { gmail_personal: number; gmail_workspace: number; outlook: number };
 }
+
+/** A platform-staff session on a customer account. */
+export interface ImpersonationSession {
+  id: string;
+  admin_email: string;
+  target_email: string;
+  organization_id: string | null;
+  organization_name: string;
+  mode: "read_only" | "read_write";
+  reason: string;
+  created_at: string;
+  expires_at: string;
+  ended_at: string | null;
+  end_reason: "exited" | "revoked" | "expired" | "target_disabled" | null;
+  writes_performed: number;
+  started_ip: string | null;
+  is_active: boolean;
+}
+
+export interface ImpersonationHandoff {
+  session: ImpersonationSession;
+  /** Single-use and worth a session. Never logged, never persisted. */
+  code: string;
+  handoff_url: string;
+  expires_in_seconds: number;
+}
+
+/** What the customer app shows across the top while staff are inside. */
+export interface SupportSessionBanner {
+  session_id: string;
+  admin_email: string;
+  target_email: string;
+  organization_name: string;
+  read_only: boolean;
+  expires_at: string;
+  reason: string;
+}
+
+export interface SupportSessionResponse {
+  user: AuthUser;
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  session: SupportSessionBanner;
+}
+
+/** One thing that happened in an account, as the customer sees it. */
+export interface ActivityEvent {
+  id: string;
+  actor_type: "user" | "api_key" | "system" | "platform_admin";
+  actor_label: string | null;
+  action: string;
+  entity_type: string;
+  entity_label: string | null;
+  summary: string | null;
+  reason: string | null;
+  created_at: string;
+}

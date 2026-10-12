@@ -7,6 +7,7 @@
     "build": "tsc -b && vite build",
     "deploy": "npm run build && firebase deploy --only hosting",
     "dev": "vite --host 0.0.0.0",
+    "dev:admin": "vite --config vite.admin.config.ts --host 0.0.0.0 --port 5174",
     "lint": "eslint . --max-warnings 0",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -b --force",

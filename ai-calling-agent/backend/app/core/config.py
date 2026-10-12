@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     # `cors_origin_list`.
     #: Both dev servers: 5173 is the customer app, 5174 the admin panel.
     cors_origins: str = "http://localhost:5173,http://localhost:5174"
+    #: Where the customer-facing app is served. Used to build the support
+    #: handoff link, which must point at the customer app rather than the
+    #: admin console. Defaults to the first CORS origin, which is the
+    #: customer app by the convention above.
+    app_base_url: str = ""
 
     # --- public reachability -------------------------------------------
     # The https URL telephony providers call back on. Required for real calls;
@@ -267,6 +272,13 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def customer_app_url(self) -> str:
+        if self.app_base_url:
+            return self.app_base_url.rstrip("/")
+        origins = self.cors_origin_list
+        return origins[0].rstrip("/") if origins else "http://localhost:5173"
 
     @property
     def is_production(self) -> bool:

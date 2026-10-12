@@ -13,6 +13,7 @@ import { Pricing } from "@/admin/pages/Pricing";
 import { Providers } from "@/admin/pages/Providers";
 import { Overview } from "@/admin/pages/Overview";
 import { Users } from "@/admin/pages/Users";
+import { SupportSessions } from "@/admin/pages/SupportSessions";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { queryClient } from "@/lib/queryClient";
 
@@ -44,6 +45,7 @@ export default function AdminApp() {
             <Route path="/providers" element={<Providers />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/users" element={<Users />} />
+            <Route path="/support-sessions" element={<SupportSessions />} />
             <Route path="/activity" element={<Activity />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

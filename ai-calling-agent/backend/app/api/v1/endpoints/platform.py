@@ -12,14 +12,20 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Request, status
 from sqlalchemy import func, select
 
-from app.api.deps import DbSession, PlatformAdmin
+from app.api.deps import DbSession, PlatformAdmin, client_ip
+from app.core.config import settings
 from app.core.errors import AppError, NotFoundError, ValidationFailedError
 from app.models.agent import Agent
 from app.models.billing import CreditEntry, CreditEntryKind, PlatformEvent
 from app.models.call import Call, CallStatus
+from app.models.impersonation import (
+    HANDOFF_SECONDS,
+    ImpersonationEndReason,
+    ImpersonationSession,
+)
 from app.models.messaging import Message
 from app.models.organization import Organization
 from app.models.package import CreditPackage, Order, OrderStatus
@@ -32,6 +38,9 @@ from app.schemas.platform import (
     CreditDeductRequest,
     CreditEntryRead,
     CreditGrantRequest,
+    ImpersonationHandoff,
+    ImpersonationRead,
+    ImpersonationStart,
     OrganizationSummary,
     OrganizationUpdate,
     PackageAdminRead,
@@ -50,6 +59,7 @@ from app.schemas.platform import (
     UserProfile,
 )
 from app.services.billing_service import BillingService, spend_total
+from app.services.impersonation import ImpersonationService
 from app.services.order_service import OrderService
 from app.services.pricing_engine import BelowCost, PricingEngine
 from app.services.provider_service import PROVIDER_SPECS, ProviderService
@@ -1316,3 +1326,78 @@ async def provider_usage(
             for run in runs.scalars()
         ],
     }
+
+
+# --- support sessions on customer accounts ------------------------------
+
+
+@router.post(
+    "/impersonation",
+    response_model=ImpersonationHandoff,
+    summary="Open a customer's account as one of their users",
+)
+async def start_impersonation(
+    payload: ImpersonationStart,
+    request: Request,
+    db: DbSession,
+    admin: PlatformAdmin,
+) -> ImpersonationHandoff:
+    """Mint a one-time link that opens the customer app as that user.
+
+    The code comes back in the response body rather than as a redirect, so it
+    never lands in a URL the browser will keep, a proxy will log or a referrer
+    header will leak. The console posts it straight to the customer app.
+    """
+    target = await db.get(User, payload.user_id)
+    if target is None:
+        raise NotFoundError("User not found")
+
+    service = ImpersonationService(db)
+    session, code = await service.start(
+        admin=admin,
+        target=target,
+        reason=payload.reason,
+        mode=payload.mode,
+        ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    return ImpersonationHandoff(
+        session=ImpersonationRead.model_validate(session),
+        code=code,
+        handoff_url=f"{settings.customer_app_url}/support-session",
+        expires_in_seconds=HANDOFF_SECONDS,
+    )
+
+
+@router.get(
+    "/impersonation",
+    response_model=list[ImpersonationRead],
+    summary="Support sessions, live and recent",
+)
+async def impersonation_sessions(db: DbSession, admin: PlatformAdmin) -> list[ImpersonationRead]:
+    sessions = await ImpersonationService(db).recent_sessions()
+    return [ImpersonationRead.model_validate(session) for session in sessions]
+
+
+@router.post(
+    "/impersonation/{session_id}/end",
+    response_model=ImpersonationRead,
+    summary="Cut a support session short",
+)
+async def revoke_impersonation(
+    session_id: uuid.UUID,
+    db: DbSession,
+    admin: PlatformAdmin,
+) -> ImpersonationRead:
+    """Any platform admin can end anyone's session, not only their own.
+
+    Someone who has walked away from an open session is exactly the case this
+    needs to cover, and they are by definition not available to end it.
+    """
+    session = await db.get(ImpersonationSession, session_id)
+    if session is None:
+        raise NotFoundError("Session not found")
+    ended = await ImpersonationService(db).end(
+        session, reason=ImpersonationEndReason.REVOKED, actor_email=admin.email
+    )
+    return ImpersonationRead.model_validate(ended)

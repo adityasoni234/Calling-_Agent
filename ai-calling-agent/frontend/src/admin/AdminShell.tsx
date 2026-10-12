@@ -43,6 +43,11 @@ const SECTIONS = [
     icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM3 21v-1a6 6 0 016-6h6a6 6 0 016 6v1",
   },
   {
+    to: "/support-sessions",
+    label: "Support access",
+    icon: "M12 11a4 4 0 100-8 4 4 0 000 8zM4 21v-1a6 6 0 016-6h1M16 16l2 2 4-4",
+  },
+  {
     to: "/activity",
     label: "Activity",
     icon: "M12 8v4l3 2M12 3a9 9 0 110 18 9 9 0 010-18z",

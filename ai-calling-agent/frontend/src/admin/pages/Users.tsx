@@ -6,6 +6,8 @@ import {
   usePlatformUsers,
 } from "@/admin/hooks";
 import { Action, Empty, Grid, PageTitle, Panel, Pill } from "@/admin/ui";
+import { StartSupportSession } from "@/admin/pages/SupportSessions";
+import type { PlatformUser } from "@/types/api";
 import { formatDateTime } from "@/lib/format";
 
 export function Users() {
@@ -14,6 +16,7 @@ export function Users() {
   const activate = useActivateUser();
   const [note, setNote] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [opening, setOpening] = useState<PlatformUser | null>(null);
 
   const rows = (users ?? []).filter((user) =>
     `${user.email} ${user.full_name} ${user.organization_name}`
@@ -77,38 +80,53 @@ export function Users() {
                   <Pill value={user.is_active ? "active" : "inactive"} />
                 </td>
                 <td className="px-3 py-3 text-right">
-                  {user.is_active ? (
-                    <Action
-                      tone="danger"
-                      busy={deactivate.isPending}
-                      onClick={async () => {
-                        if (!confirm(`Stop ${user.email} signing in?`)) return;
-                        setNote(
-                          (await deactivate.mutateAsync({ id: user.id }))
-                            .message,
-                        );
-                      }}
-                    >
-                      Deactivate
-                    </Action>
-                  ) : (
-                    <Action
-                      busy={activate.isPending}
-                      onClick={async () =>
-                        setNote(
-                          (await activate.mutateAsync({ id: user.id })).message,
-                        )
-                      }
-                    >
-                      Reactivate
-                    </Action>
-                  )}
+                  <div className="flex justify-end gap-1.5">
+                    {/* Staff cannot wear another admin's face -- the server
+                        refuses it, so the button does not pretend otherwise. */}
+                    {user.is_active && !user.is_platform_admin && (
+                      <Action onClick={() => setOpening(user)}>
+                        Open account
+                      </Action>
+                    )}
+                    {user.is_active ? (
+                      <Action
+                        tone="danger"
+                        busy={deactivate.isPending}
+                        onClick={async () => {
+                          if (!confirm(`Stop ${user.email} signing in?`))
+                            return;
+                          setNote(
+                            (await deactivate.mutateAsync({ id: user.id }))
+                              .message,
+                          );
+                        }}
+                      >
+                        Deactivate
+                      </Action>
+                    ) : (
+                      <Action
+                        busy={activate.isPending}
+                        onClick={async () =>
+                          setNote(
+                            (await activate.mutateAsync({ id: user.id }))
+                              .message,
+                          )
+                        }
+                      >
+                        Reactivate
+                      </Action>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
           </Grid>
         )}
       </Panel>
+
+      {opening && (
+        <StartSupportSession user={opening} onClose={() => setOpening(null)} />
+      )}
     </div>
   );
 }

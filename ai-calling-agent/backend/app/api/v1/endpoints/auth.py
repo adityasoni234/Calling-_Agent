@@ -1,20 +1,27 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
 
-from app.api.deps import AuthServiceDep, CurrentUser, client_ip
+from app.api.deps import AuthServiceDep, CurrentUser, DbSession, client_ip, impersonation_of
+from app.core.errors import ValidationFailedError
+from app.models.impersonation import ImpersonationEndReason, ImpersonationMode
 from app.schemas.auth import (
     AuthResponse,
     ChangePasswordRequest,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
+    SupportSessionBanner,
+    SupportSessionExchange,
+    SupportSessionResponse,
     TokenPair,
 )
 from app.schemas.common import MessageResponse
 from app.schemas.user import UserRead, UserUpdate, UserWithOrganization
+from app.services.impersonation import ImpersonationService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -111,3 +118,79 @@ async def change_password(
 ) -> MessageResponse:
     await auth_service.change_password(user, current=payload.current_password, new=payload.password)
     return MessageResponse(message="Password changed; please log in again")
+
+
+@router.post(
+    "/impersonation/exchange",
+    response_model=SupportSessionResponse,
+    summary="Trade a support handoff code for a session",
+)
+async def exchange_support_session(
+    payload: SupportSessionExchange,
+    db: DbSession,
+) -> SupportSessionResponse:
+    """Unauthenticated by design: the code *is* the credential.
+
+    It was minted for a platform admin who has already been authenticated on
+    the console, it is single-use, and it is worth sixty seconds. Requiring a
+    bearer token here would mean the customer app needed a session before it
+    could get one.
+    """
+    session, user, token, expires_at = await ImpersonationService(db).exchange(payload.code)
+    return SupportSessionResponse(
+        user=UserRead.model_validate(user),
+        access_token=token,
+        expires_in=max(0, int((expires_at - datetime.now(UTC)).total_seconds())),
+        session=SupportSessionBanner(
+            session_id=session.id,
+            admin_email=session.admin_email,
+            target_email=session.target_email,
+            organization_name=session.organization_name,
+            read_only=session.mode is ImpersonationMode.READ_ONLY,
+            expires_at=session.expires_at,
+            reason=session.reason,
+        ),
+    )
+
+
+@router.post(
+    "/impersonation/end",
+    response_model=MessageResponse,
+    summary="Leave a support session",
+)
+async def end_support_session(
+    request: Request,
+    db: DbSession,
+    user: CurrentUser,
+) -> MessageResponse:
+    """Allowed even in a read-only session -- see `_IMPERSONATION_ESCAPE`."""
+    session = impersonation_of(request)
+    if session is None:
+        raise ValidationFailedError("This is not a support session")
+    await ImpersonationService(db).end(session, reason=ImpersonationEndReason.EXITED)
+    return MessageResponse(message="Support session ended")
+
+
+@router.get(
+    "/impersonation/current",
+    response_model=SupportSessionBanner | None,
+    summary="The support session behind this request, if any",
+)
+async def current_support_session(
+    request: Request,
+    user: CurrentUser,
+) -> SupportSessionBanner | None:
+    """Lets the app render the banner after a reload without keeping its own
+    copy of the session's state, which could go stale against a revocation."""
+    session = impersonation_of(request)
+    if session is None:
+        return None
+    return SupportSessionBanner(
+        session_id=session.id,
+        admin_email=session.admin_email,
+        target_email=session.target_email,
+        organization_name=session.organization_name,
+        read_only=session.mode is ImpersonationMode.READ_ONLY,
+        expires_at=session.expires_at,
+        reason=session.reason,
+    )

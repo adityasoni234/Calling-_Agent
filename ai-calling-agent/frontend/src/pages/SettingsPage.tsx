@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { AccountActivity } from "@/components/AccountActivity";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Field } from "@/components/ui/Field";
@@ -132,6 +133,8 @@ export function SettingsPage() {
       </div>
 
       <PricingSection />
+
+      <AccountActivity />
     </div>
   );
 }

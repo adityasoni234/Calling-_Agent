@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_serializer
+
+from app.core.times import as_utc
+from app.models.impersonation import (
+    MIN_REASON_LENGTH,
+    ImpersonationEndReason,
+    ImpersonationMode,
+)
 
 
 class OrganizationSummary(BaseModel):
@@ -360,3 +367,58 @@ class PublishRequest(BaseModel):
     #: Required only when a rule prices below its recorded cost. Selling at a
     #: loss should be a decision someone signed, not an accident.
     override_reason: str | None = Field(default=None, max_length=1000)
+
+
+class ImpersonationStart(BaseModel):
+    """Opening a support session on a customer account."""
+
+    user_id: uuid.UUID
+    #: Shown to the customer in their own activity timeline, so it is written
+    #: for them rather than for us.
+    reason: str = Field(min_length=MIN_REASON_LENGTH, max_length=500)
+    #: Defaults closed. Almost every support question is answered by looking,
+    #: and a session that can write is one that can break something while
+    #: nobody is watching.
+    mode: ImpersonationMode = ImpersonationMode.READ_ONLY
+
+
+class ImpersonationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    admin_email: str
+    target_email: str
+    organization_id: uuid.UUID | None
+    organization_name: str
+    mode: ImpersonationMode
+    reason: str
+    created_at: datetime
+    expires_at: datetime
+    ended_at: datetime | None
+    end_reason: ImpersonationEndReason | None
+    writes_performed: int
+    started_ip: str | None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def is_active(self) -> bool:
+        if self.ended_at is not None:
+            return False
+        expires = as_utc(self.expires_at)
+        return expires is not None and expires > datetime.now(UTC)
+
+
+class ImpersonationHandoff(BaseModel):
+    """What the admin console needs to open the customer app as that customer.
+
+    The code is returned exactly once and is worth a session, so it is never
+    logged and never stored anywhere a later request could read it back.
+    """
+
+    session: ImpersonationRead
+    code: str
+    #: Built server-side from the configured app URL rather than assembled in
+    #: the browser, so the console cannot be tricked into posting the code to
+    #: somebody else's origin.
+    handoff_url: str
+    expires_in_seconds: int

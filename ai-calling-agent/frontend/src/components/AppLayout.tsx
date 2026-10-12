@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
+import { SupportSessionBannerBar } from "@/components/SupportSessionBanner";
+
 import { NAV_GROUPS, type NavItem } from "@/components/nav";
 import { useCampaigns, useLeadCount, useUnreadCount } from "@/hooks/api";
 import { useHealth } from "@/hooks/useHealth";
@@ -203,6 +205,9 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-ink-50">
+      {/* Above the sidebar and the header, so it is the first thing read on
+          every page rather than something that scrolls out of sight. */}
+      <SupportSessionBannerBar />
       <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-ink-200/70 bg-white lg:flex">
         <Brand organization={organization} />
         <SidebarNav />

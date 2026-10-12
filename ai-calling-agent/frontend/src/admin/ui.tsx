@@ -132,11 +132,16 @@ export function Action({
   onClick,
   tone = "default",
   busy = false,
+  // Separate from `busy`, because they say different things: busy means the
+  // request is in flight, disabled means the form is not ready. Folding them
+  // together made an incomplete form look like a request that had hung.
+  disabled = false,
 }: {
   children: ReactNode;
   onClick: () => void;
   tone?: "default" | "primary" | "danger";
   busy?: boolean;
+  disabled?: boolean;
 }) {
   const style =
     tone === "primary"
@@ -148,7 +153,7 @@ export function Action({
     <button
       type="button"
       onClick={onClick}
-      disabled={busy}
+      disabled={busy || disabled}
       className={`whitespace-nowrap rounded-md px-2 py-1 text-[0.7rem] font-medium transition-colors disabled:opacity-50 ${style}`}
     >
       {busy ? "…" : children}

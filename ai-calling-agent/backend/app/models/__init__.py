@@ -39,6 +39,11 @@ from app.models.email_account import (
     MailboxStatus,
 )
 from app.models.fx import ExchangeRate
+from app.models.impersonation import (
+    ImpersonationEndReason,
+    ImpersonationMode,
+    ImpersonationSession,
+)
 from app.models.integration import (
     ApiKey,
     WebhookDelivery,
@@ -99,6 +104,9 @@ from app.models.reservation import CreditReservation, ReservationStatus
 from app.models.user import User, UserRole
 
 __all__ = [
+    "ImpersonationSession",
+    "ImpersonationMode",
+    "ImpersonationEndReason",
     "MailboxStatus",
     "MailboxProvider",
     "EmailAccount",

@@ -108,3 +108,52 @@ CAPABILITIES: dict[UserRole, frozenset[Capability]] = {
 
 def can(role: UserRole, capability: Capability) -> bool:
     return capability in CAPABILITIES.get(role, frozenset())
+
+
+#: Never permitted while impersonating, in either mode and whatever the
+#: customer's own role allows.
+#:
+#: These are the capabilities that spend the customer's money or reach their
+#: customers. A support session that can buy credits can empty an account; one
+#: that can run a campaign can dial ten thousand people, and the call records
+#: would say the customer did it. No reason typed into a box makes that
+#: acceptable, so the box does not unlock them. If staff genuinely need a
+#: campaign run or credits moved, there are platform endpoints for that which
+#: are signed with the admin's own name.
+IMPERSONATION_FORBIDDEN: frozenset[Capability] = frozenset(
+    {
+        Capability.BUY_CREDITS,
+        Capability.MANAGE_BILLING,
+        Capability.PLACE_CALLS,
+        Capability.RUN_CAMPAIGNS,
+        Capability.SEND_MESSAGES,
+        # Adding or re-roling a user would leave behind an account that
+        # outlives the session -- a thirty-minute visit should not be able to
+        # grant itself permanent access.
+        Capability.MANAGE_TEAM,
+    }
+)
+
+#: Allowed in a read-write session but not a read-only one. Everything that
+#: is not a read lands here by default, which is the safe direction for a set
+#: that must be updated whenever a capability is added.
+_IMPERSONATION_READS: frozenset[Capability] = frozenset(
+    {
+        Capability.READ,
+        Capability.VIEW_BILLING,
+        Capability.VIEW_CONVERSATIONS,
+    }
+)
+
+
+def can_while_impersonating(capability: Capability, *, read_only: bool) -> bool:
+    """Whether a staff session may use a capability the customer's role allows.
+
+    Checked in addition to `can`, never instead of it: impersonation can only
+    ever narrow what the impersonated user could do, never widen it.
+    """
+    if capability in IMPERSONATION_FORBIDDEN:
+        return False
+    if read_only:
+        return capability in _IMPERSONATION_READS
+    return True

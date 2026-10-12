@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession, requires
@@ -14,6 +14,7 @@ from app.models.pricing import PricingRate
 from app.models.user import User
 from app.schemas.common import MessageResponse
 from app.schemas.settings_schema import (
+    ActivityEventRead,
     OrganizationUpdate,
     PricingRateCreate,
     PricingRateRead,
@@ -21,6 +22,7 @@ from app.schemas.settings_schema import (
     SettingsRead,
 )
 from app.schemas.user import OrganizationRead
+from app.services.activity_service import ActivityService
 from app.services.cost_service import CostService
 from app.services.registry import provider_status
 
@@ -135,3 +137,24 @@ async def delete_rate(rate_id: str, db: DbSession, user: CurrentUser) -> Message
     rate.is_active = False
     await db.commit()
     return MessageResponse(message="Rate deactivated")
+
+
+@router.get(
+    "/activity",
+    response_model=list[ActivityEventRead],
+    summary="What has happened in this account",
+)
+async def activity(
+    db: DbSession,
+    user: CurrentUser,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[ActivityEventRead]:
+    """The account's own audit trail, including visits by Stockvala staff.
+
+    Deliberately not gated behind a capability beyond being signed in: a
+    customer being able to see who has been in their account is not an
+    administrative privilege, it is the thing that makes support access
+    something they were told about rather than something done to them.
+    """
+    events = await ActivityService(db).timeline(user.organization_id, limit=limit)
+    return [ActivityEventRead.model_validate(event) for event in events]

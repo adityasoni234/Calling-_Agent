@@ -17,6 +17,8 @@ import type {
   AdminPackageWrite,
   CreditEntry,
   CustomerProfile,
+  ImpersonationHandoff,
+  ImpersonationSession,
   OrganizationSummary,
   PlatformEvent,
   PlatformOverview,
@@ -315,5 +317,40 @@ export function usePlatformMessages(channel?: string, status?: string) {
         `/platform/messages${query ? `?${query}` : ""}`,
       ),
     retry: false,
+  });
+}
+
+// --- support sessions on customer accounts ----------------------------
+
+export function useImpersonationSessions() {
+  return useQuery({
+    queryKey: ["platform", "impersonation"],
+    queryFn: () => api.get<ImpersonationSession[]>("/platform/impersonation"),
+    // Sessions expire on a clock, so a stale list would offer to end
+    // something that already ended and show a countdown that had stopped.
+    refetchInterval: 20_000,
+  });
+}
+
+export function useStartImpersonation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      user_id: string;
+      reason: string;
+      mode: "read_only" | "read_write";
+    }) => api.post<ImpersonationHandoff>("/platform/impersonation", body),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["platform", "impersonation"] }),
+  });
+}
+
+export function useEndImpersonation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<ImpersonationSession>(`/platform/impersonation/${id}/end`, {}),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ["platform", "impersonation"] }),
   });
 }

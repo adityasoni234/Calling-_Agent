@@ -52,6 +52,12 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         value: https://stockvala-agent.web.app,https://stockvala-admin.web.app
+      # Where a support handoff link points. It must be the customer app, not
+      # the admin console, and it is set explicitly rather than inferred so a
+      # later reordering of CORS_ORIGINS cannot silently redirect staff
+      # sessions at the wrong origin.
+      - key: APP_BASE_URL
+        value: https://stockvala-agent.web.app
       - key: ALLOW_REGISTRATION
         value: "true"
       # Providers start in mock so a fresh deploy cannot place a real call

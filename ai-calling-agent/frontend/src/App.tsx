@@ -14,6 +14,7 @@ import { KnowledgePage } from "@/pages/KnowledgePage";
 import { LeadsPage } from "@/pages/LeadsPage";
 import { LearningPage } from "@/pages/LearningPage";
 import { LandingPage } from "@/pages/LandingPage";
+import { SupportSessionEntry } from "@/components/SupportSessionBanner";
 import { EmailPage } from "@/pages/EmailPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MetaAdsPage } from "@/pages/MetaAdsPage";
@@ -35,6 +36,9 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          {/* Unauthenticated: the handoff code is what authenticates, and
+              the app has no session until it has been spent. */}
+          <Route path="/support-session" element={<SupportSessionEntry />} />
 
           <Route
             element={

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import uuid
+from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.core.security import BCRYPT_MAX_BYTES
@@ -49,3 +52,42 @@ class AuthResponse(BaseModel):
 
 class ChangePasswordRequest(PasswordMixin):
     current_password: str = Field(min_length=1, max_length=256)
+
+
+class SupportSessionExchange(BaseModel):
+    """Trading a one-time handoff code for a support session."""
+
+    code: str = Field(min_length=16, max_length=200)
+
+
+class SupportSessionBanner(BaseModel):
+    """What the customer app shows across the top of every page.
+
+    Everything here is about making the session impossible to forget: who is
+    really signed in, whose account this is, whether it can change anything,
+    and how long is left. A support tool that looks like an ordinary session
+    is one somebody will eventually mistake for their own.
+    """
+
+    session_id: uuid.UUID
+    admin_email: str
+    target_email: str
+    organization_name: str
+    read_only: bool
+    expires_at: datetime
+    reason: str
+
+
+class SupportSessionResponse(BaseModel):
+    """The exchange result.
+
+    Deliberately not an `AuthResponse`: there is no refresh token, because a
+    support session must end when the clock says so rather than renewing
+    itself behind whoever opened it.
+    """
+
+    user: UserRead
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    session: SupportSessionBanner

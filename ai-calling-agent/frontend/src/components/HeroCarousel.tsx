@@ -4,30 +4,27 @@ import { Link } from "react-router-dom";
 /**
  * The rotating hero.
  *
- * Four slides, one per thing the product actually does, advancing on their
- * own so a visitor who reads nothing still sees the breadth. Three rules
- * keep an auto-rotator from being hostile:
+ * Four slides, one per thing the product does, sitting on the page itself
+ * rather than inside a tinted panel — the panel read as an advert dropped
+ * onto the page instead of as the page's own opening.
  *
- * It stops the moment someone interacts -- hover, focus, or picking a slide
- * by hand. A panel that slides away mid-sentence is worse than no rotation.
- *
- * It stops entirely under prefers-reduced-motion, which is exactly what that
- * setting is for, and shows the first slide with all four reachable by their
- * dots.
- *
- * The dots are real buttons with labels, so the thing is usable by keyboard
- * and announced properly rather than being a decorative carousel that traps
- * everyone else.
+ * It slides horizontally on a transform, so the whole track moves as one
+ * instead of text mutating in place. Three rules keep an auto-rotator from
+ * being hostile: it stops on hover or focus, because a slide leaving
+ * mid-sentence is worse than no rotation; it does not rotate at all under
+ * prefers-reduced-motion; and the dots are real labelled buttons with arrow
+ * keys, so it is not a keyboard trap.
  */
 
-const SLIDE_MS = 6000;
+//: Two seconds, as asked. Short enough that hover-to-pause is doing real
+//: work rather than being a nicety.
+const SLIDE_MS = 2000;
 
 interface Slide {
   eyebrow: string;
   title: string;
   body: string;
   points: string[];
-  tint: string;
 }
 
 const SLIDES: Slide[] = [
@@ -40,7 +37,6 @@ const SLIDES: Slide[] = [
       "Qualifies the lead and says why",
       "Hands you a transcript with the outcome",
     ],
-    tint: "from-brand-700 to-brand-800",
   },
   {
     eyebrow: "SMS · WhatsApp",
@@ -51,7 +47,6 @@ const SLIDES: Slide[] = [
       "STOP honoured the moment it arrives",
       "Delivery receipts, not hopeful guesses",
     ],
-    tint: "from-emerald-800 to-brand-800",
   },
   {
     eyebrow: "Email",
@@ -62,7 +57,6 @@ const SLIDES: Slide[] = [
       "Hard bounces never retried",
       "Unsubscribe handled and honoured",
     ],
-    tint: "from-ink-800 to-ink-900",
   },
   {
     eyebrow: "Leads · Meta Ads",
@@ -73,7 +67,6 @@ const SLIDES: Slide[] = [
       "Qualified ones surface first, with reasons",
       "One ledger for what it all cost",
     ],
-    tint: "from-brand-800 to-emerald-900",
   },
 ];
 
@@ -83,9 +76,8 @@ export function HeroCarousel() {
   const reduced = useRef(false);
 
   useEffect(() => {
-    reduced.current = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    reduced.current =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     if (reduced.current) setPaused(true);
   }, []);
 
@@ -102,11 +94,8 @@ export function HeroCarousel() {
     return () => window.clearInterval(timer);
   }, [paused]);
 
-  const slide = SLIDES[index];
-
   return (
     <div
-      className="relative"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => !reduced.current && setPaused(false)}
       onFocusCapture={() => setPaused(true)}
@@ -118,59 +107,72 @@ export function HeroCarousel() {
       aria-roledescription="carousel"
       aria-label="What Stockvala does"
     >
-      <div
-        className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${slide.tint} px-6 py-10 transition-all duration-700 sm:px-12 sm:py-14`}
-      >
+      {/* The viewport clips; the track inside it slides. Overflow is hidden
+          rather than scrollable so a trackpad swipe cannot desync the
+          transform from the active dot. */}
+      <div className="overflow-hidden">
         <div
-          aria-hidden
-          className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-white/10 blur-3xl"
-        />
-
-        {/* key forces a remount so each slide fades in rather than the text
-            mutating in place, which reads as a glitch. */}
-        <div key={index} className="animate-fade-up">
-          <p className="text-2xs font-medium uppercase tracking-[0.18em] text-white/70">
-            <span className="tracking-normal normal-case">{slide.eyebrow}</span>
-          </p>
-          <h1 className="mt-5 max-w-3xl font-display text-3xl leading-[1.1] text-white sm:text-5xl">
-            {slide.title}
-          </h1>
-          <p className="mt-5 max-w-2xl text-base leading-relaxed text-white/80 sm:text-lg">
-            {slide.body}
-          </p>
-
-          <ul className="mt-7 grid gap-2.5 sm:grid-cols-3">
-            {slide.points.map((point) => (
-              <li
-                key={point}
-                className="flex gap-2.5 text-sm leading-relaxed text-white/85"
-              >
-                <span aria-hidden className="text-white/50">
-                  —
+          className="flex transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          style={{ transform: `translateX(-${index * 100}%)` }}
+        >
+          {SLIDES.map((slide, i) => (
+            <div
+              key={slide.eyebrow}
+              className="w-full shrink-0 pr-4"
+              // Off-screen slides are hidden from assistive tech, or the
+              // page reads as four competing headlines.
+              aria-hidden={i !== index}
+            >
+              <p className="text-2xs font-medium uppercase tracking-[0.18em] text-brand-700">
+                <span className="tracking-normal normal-case">
+                  {slide.eyebrow}
                 </span>
-                {point}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="mt-9 flex flex-wrap items-center gap-3">
-          <Link
-            to="/register"
-            className="rounded-xl bg-white px-6 py-3 text-sm font-medium text-brand-800 transition-colors hover:bg-ink-50"
-          >
-            Start free
-          </Link>
-          <Link
-            to="/login"
-            className="rounded-xl px-5 py-3 text-sm font-medium text-white/80 ring-1 ring-inset ring-white/25 transition-colors hover:bg-white/10"
-          >
-            Log in
-          </Link>
+              </p>
+              <h1 className="mt-5 max-w-3xl font-display text-4xl leading-[1.08] text-ink-900 sm:text-6xl">
+                {slide.title}
+              </h1>
+              <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-600">
+                {slide.body}
+              </p>
+              <ul className="mt-7 grid max-w-3xl gap-2.5 sm:grid-cols-3">
+                {slide.points.map((point) => (
+                  <li
+                    key={point}
+                    className="flex gap-2.5 text-sm leading-relaxed text-ink-500"
+                  >
+                    <span aria-hidden className="text-brand-600">
+                      —
+                    </span>
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="mt-5 flex items-center gap-2.5">
+      {/* Outside the track, so the buttons do not slide away from the cursor
+          that is reaching for them. */}
+      <div className="mt-9 flex flex-wrap items-center gap-3">
+        <Link
+          to="/register"
+          className="rounded-xl bg-brand-700 px-6 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-800"
+        >
+          Start free
+        </Link>
+        <Link
+          to="/login"
+          className="rounded-xl bg-white px-6 py-3 text-sm font-medium text-ink-700 ring-1 ring-inset ring-ink-300/70 transition-colors hover:bg-ink-50"
+        >
+          Log in
+        </Link>
+        <span className="text-xs text-ink-400">
+          Trial credits included. No card to begin.
+        </span>
+      </div>
+
+      <div className="mt-8 flex items-center gap-2.5">
         {SLIDES.map((item, i) => (
           <button
             key={item.eyebrow}
@@ -188,9 +190,6 @@ export function HeroCarousel() {
             }`}
           />
         ))}
-        <span className="ml-2 text-2xs text-ink-400">
-          {paused ? "Paused" : `${index + 1} of ${SLIDES.length}`}
-        </span>
       </div>
     </div>
   );

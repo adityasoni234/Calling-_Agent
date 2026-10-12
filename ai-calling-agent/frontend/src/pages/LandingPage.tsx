@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 
+import { FounderSection } from "@/components/FounderSection";
+import { HeroCarousel } from "@/components/HeroCarousel";
 import { SERVICES } from "@/components/services";
-import { ServicesTicker } from "@/components/ServicesTicker";
 import { useAuthStore } from "@/stores/auth";
 
 /**
@@ -190,56 +191,10 @@ export function LandingPage() {
 
       <main>
         {/* Hero */}
-        <section className="mx-auto max-w-6xl px-5 pb-16 pt-16 sm:px-8 sm:pb-24 sm:pt-24">
-          <p className="text-2xs font-medium uppercase tracking-[0.18em] text-brand-700">
-            English ·{" "}
-            {/* Letter-spacing pulls Devanagari conjuncts apart and uppercase
-                does nothing to them, so this script opts out of both. */}
-            <span className="tracking-normal normal-case">हिन्दी</span> ·
-            Hinglish
-          </p>
-          <h1 className="mt-5 max-w-3xl font-display text-4xl leading-[1.08] text-ink-900 sm:text-6xl">
-            An AI agent that talks to your customers in their own language.
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink-600">
-            It calls in English, Hindi or Hinglish — and switches the moment the
-            customer does, mid-sentence, without being told. Then it texts,
-            WhatsApps and emails the same lead, and tells you which ones are
-            worth your time.
-          </p>
-          {/* Someone already signed in is not a prospect. Offering them
-              "Start free" next to a nav that says "Go to dashboard" reads as
-              two different products. */}
-          <div className="mt-9 flex flex-wrap items-center gap-3">
-            {signedIn ? (
-              <Link
-                to="/dashboard"
-                className="rounded-xl bg-brand-700 px-6 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-800"
-              >
-                Go to your dashboard
-              </Link>
-            ) : (
-              <>
-                <Link
-                  to="/register"
-                  className="rounded-xl bg-brand-700 px-6 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-800"
-                >
-                  Start free
-                </Link>
-                <Link
-                  to="/login"
-                  className="rounded-xl bg-white px-6 py-3 text-sm font-medium text-ink-700 ring-1 ring-inset ring-ink-300/70 transition-colors hover:bg-ink-50"
-                >
-                  Log in
-                </Link>
-                <span className="text-xs text-ink-400">
-                  Trial credits included. No card to begin.
-                </span>
-              </>
-            )}
-          </div>
+        <section className="mx-auto max-w-6xl px-5 pb-14 pt-10 sm:px-8 sm:pb-20 sm:pt-16">
+          <HeroCarousel />
 
-          <dl className="mt-16 grid gap-x-8 gap-y-6 border-t border-ink-200/70 pt-8 sm:grid-cols-3">
+          <dl className="mt-14 grid gap-x-8 gap-y-6 border-t border-ink-200/70 pt-8 sm:grid-cols-3">
             {PROOF.map((item) => (
               <div key={item.figure}>
                 <dt className="font-display text-xl text-ink-900">
@@ -252,8 +207,6 @@ export function LandingPage() {
             ))}
           </dl>
         </section>
-
-        <ServicesTicker />
 
         {/* Language */}
         <section className="border-y border-ink-200/60 bg-brand-700">
@@ -520,7 +473,7 @@ export function LandingPage() {
           </div>
         </section>
 
-        <ServicesTicker />
+        <FounderSection />
 
         {/* CTA */}
         <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8">

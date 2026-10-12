@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.models.organization import Organization
 from app.models.package import CreditPackage, Order, OrderStatus
 from app.models.user import User
+from app.services import credentials
 from app.services.order_service import OrderService
 from app.services.payments.base import VerifiedPayment
 from tests.conftest import REGISTRATION
@@ -41,6 +42,9 @@ def _configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "razorpay_key_id", "rzp_test_key", raising=False)
     monkeypatch.setattr(settings, "razorpay_key_secret", "rzp_test_secret", raising=False)
     monkeypatch.setattr(settings, "razorpay_webhook_secret", WEBHOOK_SECRET, raising=False)
+    # Cold start, so these settings are what the vault resolver falls back
+    # to rather than a value another test happened to resolve first.
+    credentials.invalidate()
 
 
 def _event(kind: str, *, amount: int, order_id: str = PROVIDER_ORDER_ID) -> dict[str, Any]:

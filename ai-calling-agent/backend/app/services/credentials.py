@@ -17,6 +17,7 @@ nearly all of that work.
 
 from __future__ import annotations
 
+import asyncio
 import time
 
 from app.core.config import settings
@@ -67,6 +68,10 @@ FALLBACKS: dict[str, dict[str, str]] = {
 
 _cache: dict[str, tuple[float, dict[str, str]]] = {}
 
+#: The last answer the database gave, kept without expiry. The TTL above is
+#: about freshness; this is about not losing the answer entirely.
+_last_good: dict[str, dict[str, str]] = {}
+
 
 def _from_env(slug: str) -> dict[str, str]:
     return {
@@ -97,13 +102,21 @@ async def resolve(slug: str) -> dict[str, str]:
 
     resolved = {**_from_env(slug), **stored}
     _cache[slug] = (time.monotonic(), resolved)
+    _last_good[slug] = resolved
     return resolved
 
 
 def invalidate(slug: str | None = None) -> None:
-    """Drop the cache after a rotation, so the new key is used immediately."""
+    """Drop the cache after a rotation, so the new key is used immediately.
+
+    Rotating one provider keeps its `_last_good`: that is what a sync reader
+        serves while the re-resolve is in flight, and dropping it would reopen
+        the window this exists to close. Clearing everything is a different
+        request -- a genuine cold start -- so it drops both.
+    """
     if slug is None:
         _cache.clear()
+        _last_good.clear()
     else:
         _cache.pop(slug, None)
 
@@ -121,6 +134,22 @@ def get_sync(slug: str) -> dict[str, str]:
     cached = _cache.get(slug)
     if cached is not None and time.monotonic() - cached[0] < TTL_SECONDS:
         return cached[1]
+
+    # Stale, or never resolved. Kick off a refresh if there is a loop to run
+    # it on, so the next caller is fresh.
+    try:
+        asyncio.get_running_loop().create_task(resolve(slug))
+    except RuntimeError:
+        pass  # no loop here; a later async caller will refresh it
+
+    # Serve the last database answer rather than reverting to the
+    # environment. Expiry means "this might be out of date", not "pretend
+    # the database never had an answer" -- and for a provider configured
+    # only through the admin page, there is nothing in the environment to
+    # revert to, so reverting silently unconfigures it fifteen seconds
+    # after it was saved.
+    if slug in _last_good:
+        return _last_good[slug]
     return _from_env(slug)
 
 

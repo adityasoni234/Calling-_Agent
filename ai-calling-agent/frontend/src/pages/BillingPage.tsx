@@ -11,12 +11,19 @@ import { EmptyState, Pager, Table } from "@/components/ui/Table";
 import {
   useCreditBalance,
   useCreditLedger,
+  useConfirmCheckout,
   useOrders,
   usePackages,
   useStartCheckout,
   useUsage,
 } from "@/hooks/api";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { formatCredits, formatDateTime, formatMinor } from "@/lib/format";
+import {
+  CheckoutDismissed,
+  openCheckout,
+  type CheckoutHandback,
+} from "@/lib/razorpay";
 import type { Checkout, CreditPackage } from "@/types/api";
 
 /**
@@ -50,13 +57,64 @@ export function BillingPage() {
   const orders = useOrders(ordersPage);
 
   const checkout = useStartCheckout();
+  const confirm = useConfirmCheckout();
+  const { data: me } = useCurrentUser();
   const [pending, setPending] = useState<Checkout | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [paid, setPaid] = useState<string | null>(null);
 
   const buy = async (pkg: CreditPackage) => {
+    setPayError(null);
+    setPaid(null);
     const result = await checkout.mutateAsync(pkg.id);
-    // Either way the order now exists. When a provider is live this is where
-    // its checkout opens; until then the modal explains the state honestly.
-    setPending(result);
+
+    // No provider, or one that could not open an order: the order still
+    // exists, and the modal says plainly why it cannot be paid yet.
+    if (!result.provider_configured || !result.checkout) {
+      setPending(result);
+      return;
+    }
+
+    let handback: CheckoutHandback;
+    try {
+      handback = await openCheckout({
+        key: String(result.checkout.key),
+        order_id: String(result.checkout.order_id),
+        amount: Number(result.checkout.amount),
+        currency: String(result.checkout.currency ?? "INR"),
+        name: "Stockvala",
+        description: pkg.name,
+        prefill: { name: me?.full_name, email: me?.email },
+      });
+    } catch (error) {
+      // Closing the window is not a failed payment. The customer may have
+      // paid and closed too early, and the webhook settles that on its own,
+      // so the order is left exactly as it was.
+      if (error instanceof CheckoutDismissed) return;
+      setPayError(
+        error instanceof Error
+          ? error.message
+          : "The payment did not complete.",
+      );
+      return;
+    }
+
+    try {
+      // The handback proves nothing by itself. The server checks the
+      // signature and re-reads the payment from Razorpay before a single
+      // credit is granted.
+      await confirm.mutateAsync({
+        orderId: result.order.id,
+        payload: handback as unknown as Record<string, unknown>,
+      });
+      setPaid(result.order.reference);
+    } catch (error) {
+      setPayError(
+        error instanceof Error
+          ? `${error.message} If money left your account, the credits will still land — we reconcile every payment with Razorpay.`
+          : "We could not confirm that payment.",
+      );
+    }
   };
 
   const spendable = balance.data?.spendable ?? 0;
@@ -171,6 +229,21 @@ export function BillingPage() {
           <Alert tone="error">
             {(checkout.error as Error)?.message ??
               "Could not start that purchase."}
+          </Alert>
+        )}
+
+        {payError && <Alert tone="error">{payError}</Alert>}
+
+        {paid && (
+          <Alert tone="success">
+            <strong>Payment received.</strong> Credits for order {paid} are on
+            your balance now.
+          </Alert>
+        )}
+
+        {confirm.isPending && (
+          <Alert tone="info">
+            Confirming your payment with Razorpay — don&rsquo;t close this tab.
           </Alert>
         )}
       </Card>

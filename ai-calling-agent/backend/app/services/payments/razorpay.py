@@ -19,6 +19,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services import credentials
 from app.services.payments.base import (
     PaymentNotConfigured,
     PaymentProvider,
@@ -46,15 +47,25 @@ class RazorpayProvider(PaymentProvider):
 
     @property
     def configured(self) -> bool:
-        return bool(settings.razorpay_key_id and settings.razorpay_key_secret)
+        keys = credentials.get_sync("razorpay")
+        return bool(keys.get("key_id") and keys.get("key_secret"))
 
     def _auth(self) -> tuple[str, str]:
-        if not self.configured:
+        """Credentials from the vault, falling back to the environment.
+
+        Read through `credentials` rather than off `settings`, or the
+        Providers admin page would encrypt a key, report the provider
+        configured, and leave payments running on whatever was in `.env` --
+        which for most installs is nothing at all.
+        """
+        keys = credentials.get_sync("razorpay")
+        key_id, key_secret = keys.get("key_id", ""), keys.get("key_secret", "")
+        if not (key_id and key_secret):
             raise PaymentNotConfigured(
-                "Razorpay is not configured. Add RAZORPAY_KEY_ID and "
-                "RAZORPAY_KEY_SECRET, then restart."
+                "Razorpay is not configured. Add the key id and secret in "
+                "Admin \u2192 Providers, or set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET."
             )
-        return settings.razorpay_key_id, settings.razorpay_key_secret
+        return key_id, key_secret
 
     async def create_order(
         self, *, amount_minor: int, currency: str, reference: str, notes: dict[str, str]
@@ -121,9 +132,12 @@ class RazorpayProvider(PaymentProvider):
         )
 
     def verify_webhook(self, *, body: bytes, signature: str) -> dict[str, Any]:
-        secret = settings.razorpay_webhook_secret
+        secret = credentials.get_sync("razorpay").get("webhook_secret", "")
         if not secret:
-            raise PaymentNotConfigured("RAZORPAY_WEBHOOK_SECRET is not set")
+            raise PaymentNotConfigured(
+                "No Razorpay webhook secret. Add it in Admin \u2192 Providers, and set "
+                "the same value on the webhook in the Razorpay dashboard."
+            )
         expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, signature or ""):
             raise ValueError("Webhook signature did not match")

@@ -19,6 +19,7 @@ from app.api.v1.endpoints import (
     messaging,
     messaging_webhooks,
     meta,
+    payment_webhooks,
     platform,
     settings_api,
     webhooks,
@@ -44,3 +45,4 @@ api_router.include_router(media.router)
 api_router.include_router(messaging.router)
 api_router.include_router(meta.router)
 api_router.include_router(messaging_webhooks.router)
+api_router.include_router(payment_webhooks.router)
